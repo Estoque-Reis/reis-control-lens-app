@@ -1,0 +1,147 @@
+{
+  "entities": {
+    "Profile": {
+      "title": "Profile",
+      "description": "User profile information extension of Auth",
+      "type": "object",
+      "properties": {
+        "full_name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "consultor"] },
+        "branch_id": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role", "status"]
+    },
+    "Branch": {
+      "title": "Branch",
+      "description": "Store branch information",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "code": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "code", "status"]
+    },
+    "LensFamily": {
+      "title": "LensFamily",
+      "description": "Family of lenses (manufacturer, line, etc.)",
+      "type": "object",
+      "properties": {
+        "manufacturer": { "type": "string" },
+        "line": { "type": "string" },
+        "index": { "type": "string" },
+        "treatment": { "type": "string" },
+        "color": { "type": "string" },
+        "material": { "type": "string" },
+        "cost_price": { "type": "number" },
+        "min_stock_per_sku": { "type": "integer" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["manufacturer", "line"]
+    },
+    "LensSku": {
+      "title": "LensSku",
+      "description": "Specific SKU for a lens family (spherical, cylindrical)",
+      "type": "object",
+      "properties": {
+        "family_id": { "type": "string" },
+        "sku_code": { "type": "string" },
+        "spherical": { "type": "number" },
+        "cylindrical": { "type": "number" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["family_id", "sku_code", "spherical", "cylindrical"]
+    },
+    "Inventory": {
+      "title": "Inventory",
+      "description": "Current stock level for a SKU at a branch",
+      "type": "object",
+      "properties": {
+        "branch_id": { "type": "string" },
+        "sku_id": { "type": "string" },
+        "quantity": { "type": "integer" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["branch_id", "sku_id", "quantity"]
+    },
+    "Movement": {
+      "title": "Movement",
+      "description": "Transaction log for inventory changes",
+      "type": "object",
+      "properties": {
+        "branch_id": { "type": "string" },
+        "sku_id": { "type": "string" },
+        "type": { "type": "string", "enum": ["entry", "exit", "transfer_in", "transfer_out", "adjustment"] },
+        "quantity": { "type": "integer" },
+        "reason": { "type": "string" },
+        "user_id": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["branch_id", "sku_id", "type", "quantity"]
+    },
+    "Transfer": {
+      "title": "Transfer",
+      "description": "Transfer request between branches",
+      "type": "object",
+      "properties": {
+        "origin_branch_id": { "type": "string" },
+        "destination_branch_id": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected", "completed"] },
+        "requester_id": { "type": "string" },
+        "approver_id": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["origin_branch_id", "destination_branch_id", "status", "requester_id"]
+    },
+    "TransferItem": {
+      "title": "TransferItem",
+      "description": "Items associated with a transfer",
+      "type": "object",
+      "properties": {
+        "sku_id": { "type": "string" },
+        "quantity": { "type": "integer" }
+      },
+      "required": ["sku_id", "quantity"]
+    }
+  },
+  "firestore": {
+    "/profiles/{userId}": {
+      "schema": "Profile",
+      "description": "User profiles"
+    },
+    "/branches/{branchId}": {
+      "schema": "Branch",
+      "description": "Branches"
+    },
+    "/lensFamilies/{familyId}": {
+      "schema": "LensFamily",
+      "description": "Lens families"
+    },
+    "/lensSkus/{skuId}": {
+      "schema": "LensSku",
+      "description": "Lens SKUs"
+    },
+    "/inventory/{inventoryId}": {
+      "schema": "Inventory",
+      "description": "Inventory balances"
+    },
+    "/movements/{movementId}": {
+      "schema": "Movement",
+      "description": "Inventory movements log"
+    },
+    "/transfers/{transferId}": {
+      "schema": "Transfer",
+      "description": "Transfers log"
+    },
+    "/transfers/{transferId}/items/{itemId}": {
+      "schema": "TransferItem",
+      "description": "Items in a transfer"
+    }
+  }
+}

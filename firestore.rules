@@ -1,0 +1,109 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Master Gate / Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      // In this app, we might not require email verification yet, but it's best practice.
+      // For now, let's just check if signed in.
+      return isSignedIn();
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function getProfile(userId) {
+      return get(/databases/$(database)/documents/profiles/$(userId)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && getProfile(request.auth.uid).role == 'admin';
+    }
+
+    function isMasterUser() {
+      return isSignedIn() && request.auth.token.email.lower() == 'paulo_ricardo_reis@hotmail.com'.lower();
+    }
+
+    // Profiles
+    match /profiles/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+
+      function isValidProfile(data) {
+        return data.keys().hasAll(['email', 'role', 'status']) &&
+               data.email is string &&
+               data.role in ['admin', 'consultor'] &&
+               data.status in ['active', 'inactive'];
+      }
+
+      allow create: if isSignedIn() && request.auth.uid == userId && 
+                    isValidProfile(incoming()) && 
+                    (incoming().role == 'consultor' || isMasterUser()); 
+
+      allow update: if isSignedIn() && (
+        (request.auth.uid == userId && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['full_name']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['role', 'updated_at']) ||
+          isMasterUser()
+        )) ||
+        isAdmin()
+      ) && isValidProfile(incoming());
+    }
+
+    // Branches
+    match /branches/{branchId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Lens Families
+    match /lensFamilies/{familyId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Lens SKUs
+    match /lensSkus/{skuId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Inventory
+    match /inventory/{inventoryId} {
+      allow read: if isSignedIn();
+      // Inventory updates are often triggered by movements.
+      // If we handle it client-side with batches, we need to allow create/update.
+      allow create, update: if isSignedIn(); 
+    }
+
+    // Movements
+    match /movements/{movementId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && incoming().user_id == request.auth.uid;
+    }
+
+    // Transfers
+    match /transfers/{transferId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (incoming().user_id == request.auth.uid || isAdmin());
+      allow update: if isAdmin();
+    }
+  }
+}

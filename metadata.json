@@ -1,0 +1,8 @@
+{
+  "name": "Reis Controle Lens",
+  "description": "Sistema profissional de controle de estoque de lentes oftálmicas para redes de óticas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
