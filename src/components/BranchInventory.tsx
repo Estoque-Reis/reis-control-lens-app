@@ -14,7 +14,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
-  Info
+  Info,
+  Package,
+  X
 } from 'lucide-react';
 import { db, getCachedBranches, getCachedFamilies, getCachedSkus } from '@/src/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
@@ -40,6 +42,12 @@ export default function BranchInventory() {
   const [cilFilter, setCilFilter] = useState('');
   const [esfSign, setEsfSign] = useState<'+' | '-'>('+');
   const [onlyInStock, setOnlyInStock] = useState(false);
+
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+
+  // Dioptre Scales for Grid
+  const esfScale = Array.from({ length: 17 }, (_, i) => (2 - i * 0.25).toFixed(2));
+  const cilScale = Array.from({ length: 9 }, (_, i) => (-i * 0.25).toFixed(2));
 
   // Applied filters for dioptria query
   const [appliedEsfFilter, setAppliedEsfFilter] = useState('');
@@ -102,6 +110,7 @@ export default function BranchInventory() {
     setAppliedCilFilter('');
     setAppliedEsfSign('+');
     setOnlyInStock(false);
+    setViewMode('list');
     setCurrentPage(1);
   };
 
@@ -665,6 +674,51 @@ export default function BranchInventory() {
         </div>
       </div>
 
+      {/* Results Header Section */}
+      <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <Package size={18} className="text-slate-400 font-bold" />
+          <span className="text-sm font-bold text-slate-700">
+            {filteredSkusList.length === 1 ? '1 resultado encontrado' : `${filteredSkusList.length} resultados encontrados`}
+          </span>
+          {(appliedEsfFilter || appliedCilFilter) && (
+            <span className="px-2.5 py-0.5 text-[10px] font-black bg-teal-50 text-teal-700 border border-teal-100 rounded-full flex items-center gap-1.5">
+              Filtro: ESF {appliedEsfSign}{appliedEsfFilter || '0,00'} • CIL -{appliedCilFilter || '0,00'}
+              <button onClick={handleClearDioptres} className="hover:text-rose-600 transition-colors cursor-pointer p-0.5 hover:bg-rose-50 rounded" title="Limpar Filtro">
+                <X size={10} strokeWidth={3} />
+              </button>
+            </span>
+          )}
+        </div>
+        
+        {/* Toggle Visualização */}
+        <div className="flex items-center space-x-2">
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mr-1">Visualização:</span>
+          <div className="flex p-0.5 bg-slate-100 rounded-lg items-center h-8 w-36">
+            <button 
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={cn(
+                "flex-1 h-full text-[11px] font-bold rounded-md flex items-center justify-center transition-all cursor-pointer border-none outline-none focus:ring-0",
+                viewMode === 'list' ? "bg-white shadow-xs text-brand-teal font-extrabold" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              Lista
+            </button>
+            <button 
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={cn(
+                "flex-1 h-full text-[11px] font-bold rounded-md flex items-center justify-center transition-all cursor-pointer border-none outline-none focus:ring-0",
+                viewMode === 'grid' ? "bg-white shadow-xs text-brand-teal font-extrabold" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              Grade
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Main Table Matrix */}
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         {loading ? (
@@ -686,97 +740,160 @@ export default function BranchInventory() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50/75 border-b border-slate-100">
-                  <th className="pl-6 pr-4 py-4.5 text-xs font-bold text-slate-400 uppercase tracking-widest">Informações da Lente / SKU</th>
-                  <th className="px-4 py-4.5 text-xs font-bold text-slate-400 uppercase tracking-widest text-center">Esférico</th>
-                  <th className="px-4 py-4.5 text-xs font-bold text-slate-400 uppercase tracking-widest text-center">Cilíndrico</th>
-                  
-                  {/* Branch listing */}
-                  {branches.map(b => (
-                    <th key={b.id} className="px-4 py-4.5 text-xs font-bold text-brand-teal uppercase tracking-widest text-center bg-cyan-50/30">
-                      {b.name}
-                    </th>
-                  ))}
+            {viewMode === 'list' ? (
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/75 border-b border-slate-100">
+                    <th className="pl-6 pr-4 py-4.5 text-xs font-bold text-slate-400 uppercase tracking-widest">Informações da Lente / SKU</th>
+                    <th className="px-4 py-4.5 text-xs font-bold text-slate-400 uppercase tracking-widest text-center">Esférico</th>
+                    <th className="px-4 py-4.5 text-xs font-bold text-slate-400 uppercase tracking-widest text-center">Cilíndrico</th>
+                    
+                    {/* Branch listing */}
+                    {branches.map(b => (
+                      <th key={b.id} className="px-4 py-4.5 text-xs font-bold text-brand-teal uppercase tracking-widest text-center bg-cyan-50/30">
+                        {b.name}
+                      </th>
+                    ))}
 
-                  <th className="pr-6 pl-4 py-4.5 text-xs font-black text-slate-700 uppercase tracking-widest text-center">Total Geral</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {paginatedSkusList.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
-                    {/* INFO LENS */}
-                    <td className="pl-6 pr-4 py-4">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-slate-800 text-sm tracking-tight">{item.sku_code}</span>
-                        <div className="flex items-center space-x-1.5 mt-1 text-xs text-slate-400">
-                          <span className="font-semibold text-slate-500">{item.family?.manufacturer || 'N/A'}</span>
-                          <span className="text-slate-300">•</span>
-                          <span>{item.family?.line || 'N/A'}</span>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* SPH */}
-                    <td className="px-4 py-4 text-center">
-                      <span className={cn(
-                        "inline-block font-mono text-xs font-bold px-2 py-0.5 rounded-md",
-                        item.spherical > 0 ? "bg-emerald-50 text-emerald-700" : item.spherical < 0 ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600"
-                      )}>
-                        {formatRefraction(item.spherical)}
-                      </span>
-                    </td>
-
-                    {/* CYL */}
-                    <td className="px-4 py-4 text-center">
-                      <span className={cn(
-                        "inline-block font-mono text-xs font-bold px-2 py-0.5 rounded-md",
-                        item.cylindrical !== 0 ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600"
-                      )}>
-                        {formatRefraction(item.cylindrical)}
-                      </span>
-                    </td>
-
-                    {/* Quantity for each branch */}
-                    {branches.map(b => {
-                      const qty = item.branchQtys[b.id] || 0;
-                      return (
-                        <td key={b.id} className={cn("px-4 py-4 text-center bg-cyan-50/10")}>
-                          <span className={cn(
-                            "inline-block text-xs font-black min-w-8 py-1 rounded-full text-center",
-                            qty > 10 
-                              ? "bg-teal-50 text-brand-teal" 
-                              : qty > 0 
-                                ? "bg-amber-50 text-amber-600" 
-                                : "text-slate-300 font-semibold"
-                          )}>
-                            {qty > 0 ? `${qty} un` : '0'}
-                          </span>
-                        </td>
-                      );
-                    })}
-
-                    {/* TOTAL */}
-                    <td className="pr-6 pl-4 py-4 text-center">
-                      <span className={cn(
-                        "text-xs font-black px-3 py-1.5 rounded-full inline-block min-w-10 text-center",
-                        item.totalQty > 0 
-                          ? "bg-brand-cyan text-white shadow-sm" 
-                          : "bg-slate-100 text-slate-400"
-                      )}>
-                        {item.totalQty}
-                      </span>
-                    </td>
+                    <th className="pr-6 pl-4 py-4.5 text-xs font-black text-slate-700 uppercase tracking-widest text-center">Total Geral</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {paginatedSkusList.map((item) => (
+                    <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
+                      {/* INFO LENS */}
+                      <td className="pl-6 pr-4 py-4">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-slate-800 text-sm tracking-tight">{item.sku_code}</span>
+                          <div className="flex items-center space-x-1.5 mt-1 text-xs text-slate-400">
+                            <span className="font-semibold text-slate-500">{item.family?.manufacturer || 'N/A'}</span>
+                            <span className="text-slate-300">•</span>
+                            <span>{item.family?.line || 'N/A'}</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* SPH */}
+                      <td className="px-4 py-4 text-center">
+                        <span className={cn(
+                          "inline-block font-mono text-xs font-bold px-2 py-0.5 rounded-md",
+                          item.spherical > 0 ? "bg-emerald-50 text-emerald-700" : item.spherical < 0 ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600"
+                        )}>
+                          {formatRefraction(item.spherical)}
+                        </span>
+                      </td>
+
+                      {/* CYL */}
+                      <td className="px-4 py-4 text-center">
+                        <span className={cn(
+                          "inline-block font-mono text-xs font-bold px-2 py-0.5 rounded-md",
+                          item.cylindrical !== 0 ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600"
+                        )}>
+                          {formatRefraction(item.cylindrical)}
+                        </span>
+                      </td>
+
+                      {/* Quantity for each branch */}
+                      {branches.map(b => {
+                        const qty = item.branchQtys[b.id] || 0;
+                        return (
+                          <td key={b.id} className={cn("px-4 py-4 text-center bg-cyan-50/10")}>
+                            <span className={cn(
+                              "inline-block text-xs font-black min-w-8 py-1 rounded-full text-center",
+                              qty > 10 
+                                ? "bg-teal-50 text-brand-teal" 
+                                : qty > 0 
+                                  ? "bg-amber-50 text-amber-600" 
+                                  : "text-slate-300 font-semibold"
+                            )}>
+                              {qty > 0 ? `${qty} un` : '0'}
+                            </span>
+                          </td>
+                        );
+                      })}
+
+                      {/* TOTAL */}
+                      <td className="pr-6 pl-4 py-4 text-center">
+                        <span className={cn(
+                          "text-xs font-black px-3 py-1.5 rounded-full inline-block min-w-10 text-center",
+                          item.totalQty > 0 
+                            ? "bg-brand-cyan text-white shadow-sm" 
+                            : "bg-slate-100 text-slate-400"
+                        )}>
+                          {item.totalQty}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="overflow-x-auto p-6">
+                <div className="min-w-fit">
+                  <div className="grid grid-cols-[90px_repeat(9,minmax(110px,_1fr))] gap-px bg-slate-100 border border-slate-100 rounded-lg overflow-hidden">
+                    {/* Header Row */}
+                    <div className="bg-slate-50 p-4 text-[10px] font-extrabold text-slate-500 uppercase text-center flex items-center justify-center">
+                      ESF \ CIL
+                    </div>
+                    {cilScale.map(cil => (
+                      <div key={cil} className="bg-slate-50 p-4 text-[10px] font-extrabold text-slate-600 text-center flex items-center justify-center">
+                        {formatRefraction(parseFloat(cil))}
+                      </div>
+                    ))}
+
+                    {/* Data Rows */}
+                    {esfScale.map(esf => (
+                      <React.Fragment key={esf}>
+                        <div className="bg-slate-50 p-4 text-[10px] font-extrabold text-slate-600 text-center flex items-center justify-center font-mono">
+                          {formatRefraction(parseFloat(esf))}
+                        </div>
+                        {cilScale.map(cil => {
+                          const matchingItems = filteredSkusList.filter(i => 
+                            Math.abs(Number(i.spherical) - parseFloat(esf)) < 0.01 && 
+                            Math.abs(Number(i.cylindrical) - parseFloat(cil)) < 0.01
+                          );
+                          const totalQty = matchingItems.reduce((acc, i) => acc + i.totalQty, 0);
+
+                          return (
+                            <div 
+                              key={`${esf}_${cil}`} 
+                              className={cn(
+                                "bg-white p-3 text-center relative transition-colors group flex flex-col items-center justify-center min-h-[85px] w-full",
+                                totalQty === 0 ? "text-slate-200" : "text-brand-teal"
+                              )}
+                            >
+                              {totalQty > 0 ? (
+                                <div className="flex flex-col items-center justify-center space-y-1 w-full">
+                                  <span className="text-xs font-black text-brand-teal">{totalQty} un</span>
+                                  <div className="w-full flex flex-col gap-0.5 text-[8px] font-bold text-slate-500 bg-slate-50 border border-slate-100 p-1.5 rounded-md">
+                                    {branches.map(b => {
+                                      const branchQty = matchingItems.reduce((sum, item) => sum + (item.branchQtys[b.id] || 0), 0);
+                                      return (
+                                        <div key={b.id} className="flex justify-between items-center px-0.5">
+                                          <span className="text-slate-400 uppercase text-[7px] truncate max-w-[50px]" title={b.name}>{b.name.split(' ')[0]}</span>
+                                          <span className={cn(branchQty > 0 ? "text-orange-500 font-black" : "text-slate-300 font-medium")}>{branchQty}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-slate-200 font-bold text-xs">—</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* PAGINATION PANEL */}
-        {!loading && totalPages > 1 && (
+        {!loading && viewMode === 'list' && totalPages > 1 && (
           <div className="p-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
             <span className="text-xs text-slate-400 font-bold">
               Mostrando {startIndex + 1} - {Math.min(startIndex + itemsPerPage, totalItems)} de {totalItems} SKUs
