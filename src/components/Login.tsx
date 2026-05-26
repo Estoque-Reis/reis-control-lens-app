@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from '@/src/lib/firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { cn } from '@/src/lib/utils';
-import { Eye, EyeOff, LayoutDashboard, Database, AlertTriangle, Shield, Users as UsersIcon, Smartphone, Monitor } from 'lucide-react';
+import { Eye, EyeOff, LayoutDashboard, Database, AlertTriangle, Shield, Users as UsersIcon, Smartphone, Monitor, Info } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function Login() {
@@ -17,6 +17,86 @@ export default function Login() {
   const [role, setRole] = useState<'consultor' | 'admin'>('consultor');
 
   const ALLOWED_EMAIL = 'paulo_ricardo_reis@hotmail.com';
+
+  // Check for Redirect Sign-In results on mount
+  useEffect(() => {
+    const handleRedirectResult = async () => {
+      try {
+        setLoading(true);
+        const result = await getRedirectResult(auth);
+        if (result) {
+          const user = result.user;
+          const docRef = doc(db, 'profiles', user.uid);
+          const docSnap = await getDoc(docRef);
+          const isMasterUser = user.email?.toLowerCase() === ALLOWED_EMAIL.toLowerCase();
+
+          if (!docSnap.exists() || isMasterUser) {
+            const emailId = user.email ? user.email.replace(/[^a-zA-Z0-9]/g, '_') : '';
+            let preProfileData: any = {};
+            if (emailId) {
+              try {
+                const preDoc = await getDoc(doc(db, 'profiles', emailId));
+                if (preDoc.exists()) {
+                  preProfileData = preDoc.data();
+                }
+              } catch (err) {
+                console.warn('Could not read preprofile on google redirect login:', err);
+              }
+            }
+
+            const finalRole = isMasterUser ? 'admin' : (preProfileData.role || 'consultor');
+
+            try {
+              await setDoc(docRef, {
+                full_name: preProfileData.full_name || user.displayName || user.email?.split('@')[0] || 'Usuário',
+                email: user.email,
+                role: finalRole,
+                status: preProfileData.status || 'active',
+                branch_id: preProfileData.branch_id || '',
+                updated_at: new Date().toISOString(),
+                ...(docSnap.exists() ? {} : { created_at: preProfileData.created_at || new Date().toISOString() })
+              }, { merge: true });
+            } catch (writeErr) {
+              handleFirestoreError(writeErr, OperationType.WRITE, `profiles/${user.uid}`);
+            }
+          }
+        }
+      } catch (err: any) {
+        console.error('Error handling redirect auth:', err);
+        if (err.code === 'auth/unauthorized-domain') {
+          handleUnauthorizedDomainError();
+        } else {
+          setError(err.message || 'Erro ao processar login por redirecionamento.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    handleRedirectResult();
+  }, []);
+
+  const handleUnauthorizedDomainError = () => {
+    const currentDomain = window.location.hostname;
+    setError(
+      <div className="flex flex-col gap-2.5 text-left bg-amber-50/80 p-3.5 rounded-xl border border-amber-200 text-amber-800 text-xs leading-relaxed">
+        <div className="flex items-center gap-1.5 font-bold">
+          <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+          <span>Domínio não autorizado no Firebase!</span>
+        </div>
+        <p>
+          O Firebase bloqueou este login porque o domínio atual <strong className="underline text-amber-900 font-mono">{currentDomain}</strong> não está na lista de domínios autorizados do Firebase.
+        </p>
+        <div className="bg-white p-2.5 rounded border border-amber-100 mt-1">
+          <p className="font-bold text-amber-950 mb-1">Como resolver no Firebase Console:</p>
+          <ol className="list-decimal pl-4 space-y-1 text-[11px] text-amber-800">
+            <li>Acesse o <b>Firebase Console</b> {">"} <b>Authentication</b>.</li>
+            <li>Clique na aba <b>Configurações</b> (Settings) {">"} <b>Domínios Autorizados</b>.</li>
+            <li>Adicione o domínio: <code className="font-mono bg-slate-50 px-1 rounded text-red-600 font-bold">{currentDomain}</code></li>
+          </ol>
+        </div>
+      </div>
+    );
+  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,7 +267,23 @@ export default function Login() {
       }
     } catch (err: any) {
       console.error('Google Auth error:', err);
-      if (err.code === 'auth/network-request-failed') {
+      if (err.code === 'auth/unauthorized-domain') {
+        handleUnauthorizedDomainError();
+      } else if (err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request') {
+        setError(
+          <div className="flex flex-col gap-2 text-left bg-blue-50/70 p-3.5 rounded-xl border border-blue-200 text-blue-850 text-xs">
+            <span className="font-bold flex items-center gap-1"><Info size={14} className="text-blue-500 shrink-0" /> Pop-up de Login Bloqueado</span>
+            <span>Os pop-ups de autenticação do Google foram bloqueados pelo navegador (comum em celulares). Clique abaixo para entrar via redirecionamento de aba completa:</span>
+            <button 
+              type="button"
+              onClick={() => signInWithRedirect(auth, googleProvider)}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all text-center mt-1 cursor-pointer"
+            >
+              Entrar com Google por Redirecionamento
+            </button>
+          </div>
+        );
+      } else if (err.code === 'auth/network-request-failed') {
         const isIframe = window.self !== window.top;
         setError(
           <div className="flex flex-col gap-2 text-left">

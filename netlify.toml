@@ -1,0 +1,9 @@
+# Configuração do Netlify para Aplicação Single Page (React + Vite)
+[build]
+  publish = "dist"
+  command = "npm run build"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
