@@ -469,7 +469,7 @@ export default function Inventory() {
                     handleApplyFilter();
                   }
                 }}
-                className="flex-1 min-w-0 h-full text-center text-base sm:text-lg font-black text-slate-800 placeholder-slate-400 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-1 transition-all"
+                className="flex-1 min-w-0 h-full text-center text-base sm:text-lg font-black text-slate-800 placeholder-slate-400 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-1 transition-all overflow-hidden py-0 leading-none"
                 placeholder="0,00"
               />
               <div className="flex items-center h-full shrink-0 pr-1 border-l border-slate-100 bg-slate-50/70">
@@ -526,7 +526,7 @@ export default function Inventory() {
                     handleApplyFilter();
                   }
                 }}
-                className="flex-1 min-w-0 h-full text-center text-base sm:text-lg font-black text-slate-800 placeholder-slate-400 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-1 transition-all"
+                className="flex-1 min-w-0 h-full text-center text-base sm:text-lg font-black text-slate-800 placeholder-slate-400 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-1 transition-all overflow-hidden py-0 leading-none"
                 placeholder="0,00"
               />
               <div className="flex items-center h-full shrink-0 pr-1 border-l border-slate-100 bg-slate-50/70">

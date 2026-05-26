@@ -62,4 +62,16 @@
     color: var(--foreground);
     @apply font-sans antialiased;
   }
+  
+  /* Remover barra de rolagem de todos os inputs */
+  input {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    overflow: hidden !important;
+  }
+  input::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
 }
