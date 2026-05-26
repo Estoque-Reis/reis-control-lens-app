@@ -131,10 +131,17 @@ export default function Inventory() {
     }
   };
 
+  const formatInputWithAutoComma = (value: string) => {
+    let digits = value.replace(/\D/g, '').slice(0, 3);
+    if (!digits) return '';
+    if (digits.length === 1) return digits;
+    if (digits.length === 2) return `${digits[0]},${digits[1]}`;
+    return `${digits[0]},${digits[1]}${digits[2]}`;
+  };
+
   const handleEsfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let rawVal = e.target.value;
-    let cleaned = rawVal.replace(/[^\d,.-]/g, '').replace('.', ',');
-    setRefSearch(prev => ({ ...prev, esf: cleaned }));
+    const formatted = formatInputWithAutoComma(e.target.value);
+    setRefSearch(prev => ({ ...prev, esf: formatted }));
   };
 
   const handleEsfBlur = () => {
@@ -159,9 +166,8 @@ export default function Inventory() {
   };
 
   const handleCilChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let rawVal = e.target.value;
-    let cleaned = rawVal.replace(/[^\d,.-]/g, '').replace('.', ',');
-    setRefSearch(prev => ({ ...prev, cil: cleaned }));
+    const formatted = formatInputWithAutoComma(e.target.value);
+    setRefSearch(prev => ({ ...prev, cil: formatted }));
   };
 
   const handleCilBlur = () => {
@@ -441,18 +447,18 @@ export default function Inventory() {
         </div>
 
         {/* Refraction Search */}
-        <div className="md:col-span-12 lg:col-span-6">
+        <div className="md:col-span-12 lg:col-span-8">
           <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Consulta por Refração (Filtro Rápido)</label>
           <div className="flex flex-col sm:flex-row gap-3">
             {/* ESF (Spherical) Input Card */}
             <div className="flex-1 flex bg-white border-2 border-slate-300 rounded-xl overflow-hidden focus-within:ring-4 focus-within:ring-brand-teal/15 focus-within:border-brand-teal transition-all h-14 shadow-sm min-w-0">
-              <div className="bg-brand-teal text-white w-12 px-1 h-full flex items-center justify-center font-black text-xs uppercase select-none shrink-0 antialiased">
+              <div className="bg-brand-teal text-white w-10 px-0.5 h-full flex items-center justify-center font-black text-xs uppercase select-none shrink-0 antialiased">
                 ESF
               </div>
               <button 
                 onClick={() => setEsfSign(prev => prev === '+' ? '-' : '+')}
                 className={cn(
-                  "w-10 h-full flex items-center justify-center text-xl font-black border-r border-slate-100 hover:bg-slate-50 active:bg-slate-100 transition-colors shrink-0 cursor-pointer",
+                  "w-9 h-full flex items-center justify-center text-xl font-black border-r border-slate-100 hover:bg-slate-50 active:bg-slate-100 transition-colors shrink-0 cursor-pointer",
                   esfSign === '+' ? "text-emerald-600 animate-pulse" : "text-rose-600 animate-pulse"
                 )}
                 title="Alternar Sinal (Sinal de ESF)"
@@ -469,7 +475,9 @@ export default function Inventory() {
                     handleApplyFilter();
                   }
                 }}
-                className="flex-1 min-w-0 h-full text-center text-base sm:text-lg font-black text-slate-800 placeholder-slate-400 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-1 transition-all overflow-hidden py-0 leading-none"
+                onScroll={(e) => { e.currentTarget.scrollLeft = 0; }}
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', overflowX: 'hidden', overflowY: 'hidden' }}
+                className="flex-1 min-w-[70px] h-full text-center text-base sm:text-lg font-black text-slate-800 placeholder-slate-400 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-1 transition-all overflow-hidden py-0 leading-none"
                 placeholder="0,00"
               />
               <div className="flex items-center h-full shrink-0 pr-1 border-l border-slate-100 bg-slate-50/70">
@@ -507,11 +515,11 @@ export default function Inventory() {
 
             {/* CIL (Cylindrical) Input Card */}
             <div className="flex-1 flex bg-white border-2 border-slate-300 rounded-xl overflow-hidden focus-within:ring-4 focus-within:ring-brand-teal/15 focus-within:border-brand-teal transition-all h-14 shadow-sm min-w-0">
-              <div className="bg-brand-teal text-white w-12 px-1 h-full flex items-center justify-center font-black text-xs uppercase select-none shrink-0 antialiased">
+              <div className="bg-brand-teal text-white w-10 px-0.5 h-full flex items-center justify-center font-black text-xs uppercase select-none shrink-0 antialiased">
                 CIL
               </div>
               <div 
-                className="w-10 h-full flex items-center justify-center text-xl font-black border-r border-slate-100 text-rose-600 select-none shrink-0 bg-rose-50/10"
+                className="w-9 h-full flex items-center justify-center text-xl font-black border-r border-slate-100 text-rose-600 select-none shrink-0 bg-rose-50/10"
                 title="Sinal Negativo Padrão"
               >
                 -
@@ -526,7 +534,9 @@ export default function Inventory() {
                     handleApplyFilter();
                   }
                 }}
-                className="flex-1 min-w-0 h-full text-center text-base sm:text-lg font-black text-slate-800 placeholder-slate-400 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-1 transition-all overflow-hidden py-0 leading-none"
+                onScroll={(e) => { e.currentTarget.scrollLeft = 0; }}
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', overflowX: 'hidden', overflowY: 'hidden' }}
+                className="flex-1 min-w-[70px] h-full text-center text-base sm:text-lg font-black text-slate-800 placeholder-slate-400 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-1 transition-all overflow-hidden py-0 leading-none"
                 placeholder="0,00"
               />
               <div className="flex items-center h-full shrink-0 pr-1 border-l border-slate-100 bg-slate-50/70">
