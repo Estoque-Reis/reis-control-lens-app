@@ -415,7 +415,7 @@ export default function Inventory() {
       {/* Advanced Filter Bar */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
         {/* Branch Selector */}
-        <div className="md:col-span-6 lg:col-span-3">
+        <div className="md:col-span-6 lg:col-span-2">
           <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Filial</label>
           <select 
             value={selectedBranch}
@@ -428,7 +428,7 @@ export default function Inventory() {
         </div>
 
         {/* Family Selector */}
-        <div className="md:col-span-6 lg:col-span-3">
+        <div className="md:col-span-6 lg:col-span-2">
           <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Família de Lentes</label>
           <select 
             value={selectedFamily}
@@ -441,18 +441,18 @@ export default function Inventory() {
         </div>
 
         {/* Refraction Search */}
-        <div className="md:col-span-12 lg:col-span-4">
+        <div className="md:col-span-12 lg:col-span-6">
           <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Consulta por Refração (Filtro Rápido)</label>
           <div className="flex flex-col sm:flex-row gap-3">
             {/* ESF (Spherical) Input Card */}
             <div className="flex-1 flex bg-white border-2 border-slate-300 rounded-xl overflow-hidden focus-within:ring-4 focus-within:ring-brand-teal/15 focus-within:border-brand-teal transition-all h-14 shadow-sm min-w-0">
-              <div className="bg-brand-teal text-white px-3.5 h-full flex items-center justify-center font-black text-xs uppercase select-none shrink-0 antialiased">
+              <div className="bg-brand-teal text-white w-12 px-1 h-full flex items-center justify-center font-black text-xs uppercase select-none shrink-0 antialiased">
                 ESF
               </div>
               <button 
                 onClick={() => setEsfSign(prev => prev === '+' ? '-' : '+')}
                 className={cn(
-                  "px-3.5 h-full flex items-center justify-center text-xl font-black border-r border-slate-100 hover:bg-slate-50 active:bg-slate-100 transition-colors shrink-0 cursor-pointer",
+                  "w-10 h-full flex items-center justify-center text-xl font-black border-r border-slate-100 hover:bg-slate-50 active:bg-slate-100 transition-colors shrink-0 cursor-pointer",
                   esfSign === '+' ? "text-emerald-600 animate-pulse" : "text-rose-600 animate-pulse"
                 )}
                 title="Alternar Sinal (Sinal de ESF)"
@@ -469,7 +469,7 @@ export default function Inventory() {
                     handleApplyFilter();
                   }
                 }}
-                className="flex-1 min-w-0 h-full text-center text-lg sm:text-xl font-extrabold text-slate-800 placeholder-slate-400 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-2 transition-all"
+                className="flex-1 min-w-0 h-full text-center text-base sm:text-lg font-black text-slate-800 placeholder-slate-400 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-1 transition-all"
                 placeholder="0,00"
               />
               <div className="flex items-center h-full shrink-0 pr-1 border-l border-slate-100 bg-slate-50/70">
@@ -486,7 +486,7 @@ export default function Inventory() {
                     <X size={16} />
                   </button>
                 )}
-                <div className="flex flex-col justify-center h-full sm:w-8 w-6 animate-none shrink-0">
+                <div className="flex flex-col justify-center h-full w-6 animate-none shrink-0">
                   <button 
                     onClick={() => stepRefraction('esf', 'up')} 
                     className="flex-grow flex items-center justify-center hover:bg-slate-200/50 text-slate-600 hover:text-brand-teal active:scale-95 transition-all h-1/2 cursor-pointer"
@@ -507,11 +507,11 @@ export default function Inventory() {
 
             {/* CIL (Cylindrical) Input Card */}
             <div className="flex-1 flex bg-white border-2 border-slate-300 rounded-xl overflow-hidden focus-within:ring-4 focus-within:ring-brand-teal/15 focus-within:border-brand-teal transition-all h-14 shadow-sm min-w-0">
-              <div className="bg-brand-teal text-white px-3.5 h-full flex items-center justify-center font-black text-xs uppercase select-none shrink-0 antialiased">
+              <div className="bg-brand-teal text-white w-12 px-1 h-full flex items-center justify-center font-black text-xs uppercase select-none shrink-0 antialiased">
                 CIL
               </div>
               <div 
-                className="px-4.5 h-full flex items-center justify-center text-xl font-black border-r border-slate-100 text-rose-600 select-none shrink-0 bg-rose-50/10"
+                className="w-10 h-full flex items-center justify-center text-xl font-black border-r border-slate-100 text-rose-600 select-none shrink-0 bg-rose-50/10"
                 title="Sinal Negativo Padrão"
               >
                 -
@@ -526,7 +526,7 @@ export default function Inventory() {
                     handleApplyFilter();
                   }
                 }}
-                className="flex-1 min-w-0 h-full text-center text-lg sm:text-xl font-extrabold text-slate-800 placeholder-slate-400 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-2 transition-all"
+                className="flex-1 min-w-0 h-full text-center text-base sm:text-lg font-black text-slate-800 placeholder-slate-400 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-1 transition-all"
                 placeholder="0,00"
               />
               <div className="flex items-center h-full shrink-0 pr-1 border-l border-slate-100 bg-slate-50/70">
@@ -543,7 +543,7 @@ export default function Inventory() {
                     <X size={16} />
                   </button>
                 )}
-                <div className="flex flex-col justify-center h-full sm:w-8 w-6 animate-none shrink-0">
+                <div className="flex flex-col justify-center h-full w-6 animate-none shrink-0">
                   <button 
                     onClick={() => stepRefraction('cil', 'up')} 
                     className="flex-grow flex items-center justify-center hover:bg-slate-200/50 text-slate-600 hover:text-brand-teal active:scale-95 transition-all h-1/2 cursor-pointer"
