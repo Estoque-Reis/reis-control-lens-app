@@ -112,14 +112,17 @@ export default function BranchInventory() {
     if (formattedEsf) {
       if (formattedEsf.startsWith('-')) {
         currentEsfSign = '-';
-        formattedEsf = formattedEsf.substring(1);
+        formattedEsf = formattedEsf.substring(1).trim();
       } else if (formattedEsf.startsWith('+')) {
         currentEsfSign = '+';
-        formattedEsf = formattedEsf.substring(1);
+        formattedEsf = formattedEsf.substring(1).trim();
       }
       let num = parseFloat(formattedEsf.replace(',', '.')) || 0;
+      if (num < 0) {
+        currentEsfSign = '-';
+        num = Math.abs(num);
+      }
       if (num > 2.0) num = 2.0;
-      if (num < 0) num = 0;
       num = Math.round(num * 4) / 4;
       formattedEsf = num.toFixed(2).replace('.', ',');
     }
@@ -128,11 +131,11 @@ export default function BranchInventory() {
     let formattedCil = cilFilter.trim();
     if (formattedCil) {
       if (formattedCil.startsWith('-') || formattedCil.startsWith('+')) {
-        formattedCil = formattedCil.substring(1);
+        formattedCil = formattedCil.substring(1).trim();
       }
       let num = parseFloat(formattedCil.replace(',', '.')) || 0;
+      num = Math.abs(num); // cylindrical is always negative visual representation but store holds magnitude
       if (num > 2.0) num = 2.0;
-      if (num < 0) num = 0;
       num = Math.round(num * 4) / 4;
       formattedCil = num.toFixed(2).replace('.', ',');
     }
@@ -264,8 +267,29 @@ export default function BranchInventory() {
     const branchQtys = inventoryMatrix[sku.id] || {};
     const totalQty = Object.values(branchQtys).reduce((sum: number, q: any) => sum + (q || 0), 0);
 
+    // Safely parse spherical and cylindrical to real numbers
+    let sphericalNum = 0;
+    if (sku.spherical !== undefined && sku.spherical !== null) {
+      if (typeof sku.spherical === 'number') {
+        sphericalNum = sku.spherical;
+      } else {
+        sphericalNum = parseFloat(String(sku.spherical).replace(',', '.').trim()) || 0;
+      }
+    }
+
+    let cylindricalNum = 0;
+    if (sku.cylindrical !== undefined && sku.cylindrical !== null) {
+      if (typeof sku.cylindrical === 'number') {
+        cylindricalNum = sku.cylindrical;
+      } else {
+        cylindricalNum = parseFloat(String(sku.cylindrical).replace(',', '.').trim()) || 0;
+      }
+    }
+
     return {
       ...sku,
+      spherical: sphericalNum,
+      cylindrical: cylindricalNum,
       family,
       branchQtys,
       totalQty
@@ -292,17 +316,18 @@ export default function BranchInventory() {
 
     // 4. Esférico
     if (appliedEsfFilter) {
-      const filterEsfVal = parseFloat(appliedEsfFilter.replace(',', '.')) || 0;
-      const finalFilterEsf = appliedEsfSign === '-' ? -filterEsfVal : filterEsfVal;
-      if (Math.abs(Number(item.spherical) - finalFilterEsf) > 0.01) {
+      const cleanEsfFilter = appliedEsfFilter.replace(',', '.').trim();
+      const finalFilterEsf = parseFloat(`${appliedEsfSign === '-' ? '-' : ''}${cleanEsfFilter}`);
+      if (!isNaN(finalFilterEsf) && Math.abs(item.spherical - finalFilterEsf) > 0.01) {
         return false;
       }
     }
 
     // 5. Cilíndrico
     if (appliedCilFilter) {
-      const filterCilVal = -Math.abs(parseFloat(appliedCilFilter.replace(',', '.')) || 0); // cylindrical is always negative
-      if (Math.abs(Number(item.cylindrical) - filterCilVal) > 0.01) {
+      const cleanCilFilter = appliedCilFilter.replace(',', '.').trim();
+      const filterCilVal = -Math.abs(parseFloat(cleanCilFilter) || 0); // cylindrical is always negative
+      if (Math.abs(item.cylindrical - filterCilVal) > 0.01) {
         return false;
       }
     }

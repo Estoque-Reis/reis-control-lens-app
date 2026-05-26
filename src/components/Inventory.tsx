@@ -44,14 +44,17 @@ export default function Inventory() {
     if (formattedEsf) {
       if (formattedEsf.startsWith('-')) {
         currentEsfSign = '-';
-        formattedEsf = formattedEsf.substring(1);
+        formattedEsf = formattedEsf.substring(1).trim();
       } else if (formattedEsf.startsWith('+')) {
         currentEsfSign = '+';
-        formattedEsf = formattedEsf.substring(1);
+        formattedEsf = formattedEsf.substring(1).trim();
       }
       let num = parseFloat(formattedEsf.replace(',', '.')) || 0;
+      if (num < 0) {
+        currentEsfSign = '-';
+        num = Math.abs(num);
+      }
       if (num > 2.0) num = 2.0;
-      if (num < 0) num = 0;
       num = Math.round(num * 4) / 4;
       formattedEsf = num.toFixed(2).replace('.', ',');
     }
@@ -59,11 +62,11 @@ export default function Inventory() {
     let formattedCil = refSearch.cil.trim();
     if (formattedCil) {
       if (formattedCil.startsWith('-') || formattedCil.startsWith('+')) {
-        formattedCil = formattedCil.substring(1);
+        formattedCil = formattedCil.substring(1).trim();
       }
       let num = parseFloat(formattedCil.replace(',', '.')) || 0;
+      num = Math.abs(num); // cylindrical magnitude is positive in input but visualized as negative
       if (num > 2.0) num = 2.0;
-      if (num < 0) num = 0;
       num = Math.round(num * 4) / 4;
       formattedCil = num.toFixed(2).replace('.', ',');
     }
@@ -392,11 +395,32 @@ export default function Inventory() {
     const matchFamily = !selectedFamily || sku.family_id === selectedFamily;
 
     // Dioptre filtering logic based on applied search
-    const esfSearch = parseFloat(`${appliedRefSearch.esfSign}${appliedRefSearch.esf}`.replace(',', '.'));
-    const cilSearch = parseFloat(`-${appliedRefSearch.cil}`.replace(',', '.'));
+    const cleanEsfSearch = appliedRefSearch.esf.replace(',', '.').trim();
+    const esfSearch = parseFloat(`${appliedRefSearch.esfSign === '-' ? '-' : ''}${cleanEsfSearch}`);
+    
+    const cleanCilSearch = appliedRefSearch.cil.replace(',', '.').trim();
+    const cilSearch = -Math.abs(parseFloat(cleanCilSearch) || 0);
 
-    const matchEsf = !appliedRefSearch.esf || isNaN(esfSearch) || Math.abs(Number(sku.spherical) - esfSearch) < 0.01;
-    const matchCil = !appliedRefSearch.cil || isNaN(cilSearch) || Math.abs(Number(sku.cylindrical) - cilSearch) < 0.01;
+    let itemSpherical = 0;
+    if (sku.spherical !== undefined && sku.spherical !== null) {
+      if (typeof sku.spherical === 'number') {
+        itemSpherical = sku.spherical;
+      } else {
+        itemSpherical = parseFloat(String(sku.spherical).replace(',', '.').trim()) || 0;
+      }
+    }
+
+    let itemCylindrical = 0;
+    if (sku.cylindrical !== undefined && sku.cylindrical !== null) {
+      if (typeof sku.cylindrical === 'number') {
+        itemCylindrical = sku.cylindrical;
+      } else {
+        itemCylindrical = parseFloat(String(sku.cylindrical).replace(',', '.').trim()) || 0;
+      }
+    }
+
+    const matchEsf = !appliedRefSearch.esf || isNaN(esfSearch) || Math.abs(itemSpherical - esfSearch) < 0.01;
+    const matchCil = !appliedRefSearch.cil || isNaN(cilSearch) || Math.abs(itemCylindrical - cilSearch) < 0.01;
 
     return matchSearch && matchEsf && matchCil && matchFamily;
   });
