@@ -391,8 +391,8 @@ export default function Inventory() {
     const esfSearch = parseFloat(`${appliedRefSearch.esfSign}${appliedRefSearch.esf}`.replace(',', '.'));
     const cilSearch = parseFloat(`-${appliedRefSearch.cil}`.replace(',', '.'));
 
-    const matchEsf = !appliedRefSearch.esf || isNaN(esfSearch) || parseFloat(sku.spherical) === esfSearch;
-    const matchCil = !appliedRefSearch.cil || isNaN(cilSearch) || parseFloat(sku.cylindrical) === cilSearch;
+    const matchEsf = !appliedRefSearch.esf || isNaN(esfSearch) || Math.abs(Number(sku.spherical) - esfSearch) < 0.01;
+    const matchCil = !appliedRefSearch.cil || isNaN(cilSearch) || Math.abs(Number(sku.cylindrical) - cilSearch) < 0.01;
 
     return matchSearch && matchEsf && matchCil && matchFamily;
   });

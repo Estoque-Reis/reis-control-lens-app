@@ -106,9 +106,44 @@ export default function BranchInventory() {
   };
 
   const handleApplyDioptres = () => {
-    setAppliedEsfFilter(esfFilter);
-    setAppliedCilFilter(cilFilter);
-    setAppliedEsfSign(esfSign);
+    // Normalizar ESF antes de pesquisar
+    let formattedEsf = esfFilter.trim();
+    let currentEsfSign = esfSign;
+    if (formattedEsf) {
+      if (formattedEsf.startsWith('-')) {
+        currentEsfSign = '-';
+        formattedEsf = formattedEsf.substring(1);
+      } else if (formattedEsf.startsWith('+')) {
+        currentEsfSign = '+';
+        formattedEsf = formattedEsf.substring(1);
+      }
+      let num = parseFloat(formattedEsf.replace(',', '.')) || 0;
+      if (num > 2.0) num = 2.0;
+      if (num < 0) num = 0;
+      num = Math.round(num * 4) / 4;
+      formattedEsf = num.toFixed(2).replace('.', ',');
+    }
+
+    // Normalizar CIL antes de pesquisar
+    let formattedCil = cilFilter.trim();
+    if (formattedCil) {
+      if (formattedCil.startsWith('-') || formattedCil.startsWith('+')) {
+        formattedCil = formattedCil.substring(1);
+      }
+      let num = parseFloat(formattedCil.replace(',', '.')) || 0;
+      if (num > 2.0) num = 2.0;
+      if (num < 0) num = 0;
+      num = Math.round(num * 4) / 4;
+      formattedCil = num.toFixed(2).replace('.', ',');
+    }
+
+    setEsfSign(currentEsfSign);
+    setEsfFilter(formattedEsf);
+    setCilFilter(formattedCil);
+
+    setAppliedEsfFilter(formattedEsf);
+    setAppliedCilFilter(formattedCil);
+    setAppliedEsfSign(currentEsfSign);
     setCurrentPage(1);
   };
 
@@ -186,6 +221,44 @@ export default function BranchInventory() {
     setCurrentPage(1);
   };
 
+  const handleEsfBlur = () => {
+    let esfVal = esfFilter.trim();
+    if (!esfVal) return;
+    
+    if (esfVal.startsWith('-')) {
+      setEsfSign('-');
+      esfVal = esfVal.substring(1);
+    } else if (esfVal.startsWith('+')) {
+      setEsfSign('+');
+      esfVal = esfVal.substring(1);
+    }
+    
+    let num = parseFloat(esfVal.replace(',', '.')) || 0;
+    
+    if (num > 2.0) num = 2.0;
+    if (num < 0) num = 0;
+    
+    num = Math.round(num * 4) / 4;
+    setEsfFilter(num.toFixed(2).replace('.', ','));
+  };
+
+  const handleCilBlur = () => {
+    let cilVal = cilFilter.trim();
+    if (!cilVal) return;
+    
+    if (cilVal.startsWith('-') || cilVal.startsWith('+')) {
+      cilVal = cilVal.substring(1);
+    }
+    
+    let num = parseFloat(cilVal.replace(',', '.')) || 0;
+    
+    if (num > 2.0) num = 2.0;
+    if (num < 0) num = 0;
+    
+    num = Math.round(num * 4) / 4;
+    setCilFilter(num.toFixed(2).replace('.', ','));
+  };
+
   const filteredSkusList = skus.map(sku => {
     const family = familiesMap.get(sku.family_id);
     const branchQtys = inventoryMatrix[sku.id] || {};
@@ -217,7 +290,7 @@ export default function BranchInventory() {
     if (appliedEsfFilter) {
       const filterEsfVal = parseFloat(appliedEsfFilter.replace(',', '.')) || 0;
       const finalFilterEsf = appliedEsfSign === '-' ? -filterEsfVal : filterEsfVal;
-      if (Number(item.spherical) !== finalFilterEsf) {
+      if (Math.abs(Number(item.spherical) - finalFilterEsf) > 0.01) {
         return false;
       }
     }
@@ -225,7 +298,7 @@ export default function BranchInventory() {
     // 5. Cilíndrico
     if (appliedCilFilter) {
       const filterCilVal = -Math.abs(parseFloat(appliedCilFilter.replace(',', '.')) || 0); // cylindrical is always negative
-      if (Number(item.cylindrical) !== filterCilVal) {
+      if (Math.abs(Number(item.cylindrical) - filterCilVal) > 0.01) {
         return false;
       }
     }
@@ -482,6 +555,7 @@ export default function BranchInventory() {
                   inputMode="decimal"
                   value={esfFilter}
                   onChange={handleEsfChange}
+                  onBlur={handleEsfBlur}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleApplyDioptres(); }}
                   onScroll={(e) => { e.currentTarget.scrollLeft = 0; }}
                   style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', overflowX: 'hidden', overflowY: 'hidden' }}
@@ -516,6 +590,7 @@ export default function BranchInventory() {
                   inputMode="decimal"
                   value={cilFilter}
                   onChange={handleCilChange}
+                  onBlur={handleCilBlur}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleApplyDioptres(); }}
                   onScroll={(e) => { e.currentTarget.scrollLeft = 0; }}
                   style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', overflowX: 'hidden', overflowY: 'hidden' }}
