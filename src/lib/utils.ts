@@ -23,3 +23,28 @@ export function generateSkuCode(familyLine: string, esf: number, cil: number) {
   const cilStr = formatRefraction(cil);
   return `${familyLine.toUpperCase()}-ESF${esfStr}-CIL${cilStr}`;
 }
+
+export function sanitizeResidualText(value: string | null | undefined): string {
+  if (!value) return '';
+  let res = value;
+  // Replace all capitalization variants of VERDE RESIDUAL -> RESIDUAL VERDE
+  res = res.replace(/VERDE\s+RESIDUAL/g, 'RESIDUAL VERDE');
+  res = res.replace(/Verde\s+Residual/g, 'Residual Verde');
+  res = res.replace(/verde\s+residual/gi, (match) => {
+    if (match === match.toUpperCase()) return 'RESIDUAL VERDE';
+    if (match[0] === match[0].toUpperCase()) return 'Residual Verde';
+    return 'residual verde';
+  });
+
+  // Replace all capitalization variants of AZUL RESIDUAL -> RESIDUAL AZUL
+  res = res.replace(/AZUL\s+RESIDUAL/g, 'RESIDUAL AZUL');
+  res = res.replace(/Azul\s+Residual/g, 'Residual Azul');
+  res = res.replace(/azul\s+residual/gi, (match) => {
+    if (match === match.toUpperCase()) return 'RESIDUAL AZUL';
+    if (match[0] === match[0].toUpperCase()) return 'Residual Azul';
+    return 'residual azul';
+  });
+
+  return res;
+}
+

@@ -3,7 +3,7 @@ import { db, clearCache } from '@/src/lib/firebase';
 import { collection, getDocs, doc, setDoc, writeBatch, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Plus, Trash2, Edit2, Play, Grid3X3, Package, X, DollarSign, Search, Check, AlertCircle, Info } from 'lucide-react';
 import { LensFamily } from '@/src/types';
-import { generateSkuCode, formatCurrency, cn } from '@/src/lib/utils';
+import { generateSkuCode, formatCurrency, cn, sanitizeResidualText } from '@/src/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function LensFamilies() {
@@ -47,7 +47,44 @@ export default function LensFamilies() {
     setLoading(true);
     try {
       const snapshot = await getDocs(collection(db, 'lensFamilies'));
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LensFamily));
+      const data = snapshot.docs.map(docSnap => {
+        const docData = docSnap.data();
+        const rawLine = docData.line || '';
+        const rawTreatment = docData.treatment || '';
+        const rawMaterial = docData.material || '';
+        
+        const sanitizedLine = sanitizeResidualText(rawLine);
+        const sanitizedTreatment = sanitizeResidualText(rawTreatment);
+        const sanitizedMaterial = sanitizeResidualText(rawMaterial);
+        
+        const needsUpdateInDb = 
+          rawLine !== sanitizedLine || 
+          rawTreatment !== sanitizedTreatment || 
+          rawMaterial !== sanitizedMaterial;
+
+        const familyObj = { 
+          id: docSnap.id, 
+          ...docData, 
+          line: sanitizedLine,
+          treatment: sanitizedTreatment || null,
+          material: sanitizedMaterial || null
+        } as LensFamily;
+
+        if (needsUpdateInDb) {
+          updateDoc(doc(db, 'lensFamilies', docSnap.id), {
+            line: sanitizedLine,
+            treatment: sanitizedTreatment || null,
+            material: sanitizedMaterial || null,
+            updated_at: new Date().toISOString()
+          }).then(() => {
+            clearCache('lensFamilies');
+          }).catch(err => {
+            console.error("Error auto-sanitizing family doc in Firestore:", err);
+          });
+        }
+
+        return familyObj;
+      });
       setFamilies(data);
     } catch (err) {
       console.error("Error fetching families:", err);
@@ -96,12 +133,16 @@ export default function LensFamilies() {
 
     setSaving(true);
     try {
+      const sanitizedLine = sanitizeResidualText(formData.line);
+      const sanitizedTreatment = sanitizeResidualText(formData.treatment);
+      const sanitizedMaterial = sanitizeResidualText(formData.material);
+
       const dataToSave = {
         manufacturer: formData.manufacturer,
-        line: formData.line,
+        line: sanitizedLine,
         index: formData.index,
-        treatment: formData.treatment,
-        material: formData.material,
+        treatment: sanitizedTreatment || null,
+        material: sanitizedMaterial || null,
         cost_price: parseFloat(formData.cost_price.replace(',', '.')),
         min_stock_per_sku: parseInt(formData.min_stock_per_sku),
         updated_at: new Date().toISOString()
