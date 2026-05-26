@@ -167,7 +167,15 @@ export default function BranchInventory() {
   };
 
   const handleEsfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatInputWithAutoComma(e.target.value);
+    let value = e.target.value;
+    if (value.startsWith('-')) {
+      setEsfSign('-');
+      value = value.substring(1);
+    } else if (value.startsWith('+')) {
+      setEsfSign('+');
+      value = value.substring(1);
+    }
+    const formatted = formatInputWithAutoComma(value);
     setEsfFilter(formatted);
     setCurrentPage(1);
   };
