@@ -382,7 +382,11 @@ export default function Inventory() {
     const skuCode = sku.sku_code || '';
     const manufacturer = sku.family?.manufacturer || '';
     
-    const matchSearch = skuCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    // Normalize both strings to match either dots or commas (e.g., -1.75 matches -1,75)
+    const normalizedSkuCode = skuCode.toLowerCase().replace(/,/g, '.');
+    const normalizedSearchQuery = searchQuery.toLowerCase().replace(/,/g, '.');
+    
+    const matchSearch = normalizedSkuCode.includes(normalizedSearchQuery) ||
                        manufacturer.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchFamily = !selectedFamily || sku.family_id === selectedFamily;
@@ -793,8 +797,8 @@ export default function Inventory() {
                     </div>
                     {cilScale.map(cil => {
                       const matchingItems = filteredItems.filter(i => 
-                        Number(i.sku?.spherical) === parseFloat(esf) && 
-                        Number(i.sku?.cylindrical) === parseFloat(cil)
+                        Math.abs(Number(i.sku?.spherical) - parseFloat(esf)) < 0.01 && 
+                        Math.abs(Number(i.sku?.cylindrical) - parseFloat(cil)) < 0.01
                       );
                       const totalQty = matchingItems.reduce((acc, i) => acc + i.quantity, 0);
                       const minStock = matchingItems[0]?.sku?.family?.min_stock_per_sku || 0;

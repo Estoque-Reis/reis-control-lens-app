@@ -271,9 +271,13 @@ export default function BranchInventory() {
       totalQty
     };
   }).filter(item => {
-    // 1. Search Query (SKU Code)
-    if (searchQuery && !item.sku_code.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return false;
+    // 1. Search Query (SKU Code with comma/dot normalization)
+    if (searchQuery) {
+      const normalizedSkuCode = item.sku_code.toLowerCase().replace(/,/g, '.');
+      const normalizedSearchQuery = searchQuery.toLowerCase().replace(/,/g, '.');
+      if (!normalizedSkuCode.includes(normalizedSearchQuery)) {
+        return false;
+      }
     }
 
     // 2. Manufacturer
