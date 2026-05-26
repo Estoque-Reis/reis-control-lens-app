@@ -133,6 +133,26 @@ export default function BranchInventory() {
     setCurrentPage(1);
   };
 
+  const formatInputWithAutoComma = (value: string) => {
+    let digits = value.replace(/\D/g, '').slice(0, 3);
+    if (!digits) return '';
+    if (digits.length === 1) return digits;
+    if (digits.length === 2) return `${digits[0]},${digits[1]}`;
+    return `${digits[0]},${digits[1]}${digits[2]}`;
+  };
+
+  const handleEsfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatInputWithAutoComma(e.target.value);
+    setEsfFilter(formatted);
+    setCurrentPage(1);
+  };
+
+  const handleCilChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatInputWithAutoComma(e.target.value);
+    setCilFilter(formatted);
+    setCurrentPage(1);
+  };
+
   const filteredSkusList = skus.map(sku => {
     const family = familiesMap.get(sku.family_id);
     const branchQtys = inventoryMatrix[sku.id] || {};
@@ -426,10 +446,13 @@ export default function BranchInventory() {
                 </button>
                 <input 
                   type="text" 
+                  inputMode="decimal"
                   value={esfFilter}
-                  onChange={(e) => { setEsfFilter(e.target.value.replace(/[^\d,]/g, '')); setCurrentPage(1); }}
+                  onChange={handleEsfChange}
+                  onScroll={(e) => { e.currentTarget.scrollLeft = 0; }}
+                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', overflowX: 'hidden', overflowY: 'hidden' }}
                   placeholder="0,00"
-                  className="w-11 text-center bg-transparent border-none outline-none font-bold text-slate-700 text-xs px-0"
+                  className="w-14 text-center bg-transparent border-none outline-none font-bold text-slate-700 text-xs px-0 overflow-hidden py-0 leading-none"
                 />
                 <button
                   type="button"
@@ -456,10 +479,13 @@ export default function BranchInventory() {
                 </button>
                 <input 
                   type="text" 
+                  inputMode="decimal"
                   value={cilFilter}
-                  onChange={(e) => { setCilFilter(e.target.value.replace(/[^\d,]/g, '')); setCurrentPage(1); }}
+                  onChange={handleCilChange}
+                  onScroll={(e) => { e.currentTarget.scrollLeft = 0; }}
+                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', overflowX: 'hidden', overflowY: 'hidden' }}
                   placeholder="0,00"
-                  className="w-11 text-center bg-transparent border-none outline-none font-bold text-slate-700 text-xs px-0"
+                  className="w-14 text-center bg-transparent border-none outline-none font-bold text-slate-700 text-xs px-0 overflow-hidden py-0 leading-none"
                 />
                 <button
                   type="button"
