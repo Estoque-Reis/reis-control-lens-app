@@ -41,6 +41,11 @@ export default function BranchInventory() {
   const [esfSign, setEsfSign] = useState<'+' | '-'>('+');
   const [onlyInStock, setOnlyInStock] = useState(false);
 
+  // Applied filters for dioptria query
+  const [appliedEsfFilter, setAppliedEsfFilter] = useState('');
+  const [appliedCilFilter, setAppliedCilFilter] = useState('');
+  const [appliedEsfSign, setAppliedEsfSign] = useState<'+' | '-'>('+');
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
@@ -93,7 +98,27 @@ export default function BranchInventory() {
     setEsfFilter('');
     setCilFilter('');
     setEsfSign('+');
+    setAppliedEsfFilter('');
+    setAppliedCilFilter('');
+    setAppliedEsfSign('+');
     setOnlyInStock(false);
+    setCurrentPage(1);
+  };
+
+  const handleApplyDioptres = () => {
+    setAppliedEsfFilter(esfFilter);
+    setAppliedCilFilter(cilFilter);
+    setAppliedEsfSign(esfSign);
+    setCurrentPage(1);
+  };
+
+  const handleClearDioptres = () => {
+    setEsfFilter('');
+    setCilFilter('');
+    setEsfSign('+');
+    setAppliedEsfFilter('');
+    setAppliedCilFilter('');
+    setAppliedEsfSign('+');
     setCurrentPage(1);
   };
 
@@ -181,17 +206,17 @@ export default function BranchInventory() {
     }
 
     // 4. Esférico
-    if (esfFilter) {
-      const filterEsfVal = parseFloat(esfFilter.replace(',', '.')) || 0;
-      const finalFilterEsf = esfSign === '-' ? -filterEsfVal : filterEsfVal;
+    if (appliedEsfFilter) {
+      const filterEsfVal = parseFloat(appliedEsfFilter.replace(',', '.')) || 0;
+      const finalFilterEsf = appliedEsfSign === '-' ? -filterEsfVal : filterEsfVal;
       if (item.spherical !== finalFilterEsf) {
         return false;
       }
     }
 
     // 5. Cilíndrico
-    if (cilFilter) {
-      const filterCilVal = -Math.abs(parseFloat(cilFilter.replace(',', '.')) || 0); // cylindrical is always negative
+    if (appliedCilFilter) {
+      const filterCilVal = -Math.abs(parseFloat(appliedCilFilter.replace(',', '.')) || 0); // cylindrical is always negative
       if (item.cylindrical !== filterCilVal) {
         return false;
       }
@@ -417,8 +442,8 @@ export default function BranchInventory() {
         </div>
 
         {/* Dioptre filtering segment */}
-        <div className="pt-4 border-t border-slate-100 flex flex-col md:flex-row items-center gap-6">
-          <div className="flex items-center space-x-4 shrink-0">
+        <div className="pt-4 border-t border-slate-100 flex flex-col xl:flex-row items-stretch xl:items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4 shrink-0">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Dioptrias:</span>
             
             {/* Esférico */}
@@ -449,6 +474,7 @@ export default function BranchInventory() {
                   inputMode="decimal"
                   value={esfFilter}
                   onChange={handleEsfChange}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleApplyDioptres(); }}
                   onScroll={(e) => { e.currentTarget.scrollLeft = 0; }}
                   style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', overflowX: 'hidden', overflowY: 'hidden' }}
                   placeholder="0,00"
@@ -482,6 +508,7 @@ export default function BranchInventory() {
                   inputMode="decimal"
                   value={cilFilter}
                   onChange={handleCilChange}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleApplyDioptres(); }}
                   onScroll={(e) => { e.currentTarget.scrollLeft = 0; }}
                   style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', overflowX: 'hidden', overflowY: 'hidden' }}
                   placeholder="0,00"
@@ -496,10 +523,32 @@ export default function BranchInventory() {
                 </button>
               </div>
             </div>
+
+            {/* Botão de Pesquisa de Dioptria */}
+            <button
+              type="button"
+              onClick={handleApplyDioptres}
+              className="px-4 py-2 bg-brand-teal text-white hover:bg-brand-teal/90 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 shadow-md shadow-brand-teal/10 active:scale-95 cursor-pointer"
+            >
+              <Search size={14} />
+              <span>Pesquisar Dioptria</span>
+            </button>
+
+            {/* Botão de Limpar Dioptria */}
+            {(appliedEsfFilter || appliedCilFilter) && (
+              <button
+                type="button"
+                onClick={handleClearDioptres}
+                className="px-3 py-2 bg-slate-100 text-slate-600 hover:text-slate-800 hover:bg-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1 active:scale-95 cursor-pointer border border-slate-250/20"
+              >
+                <RotateCcw size={12} />
+                <span>Limpar</span>
+              </button>
+            )}
           </div>
-          <div className="text-[10px] text-slate-400 font-medium leading-relaxed max-w-md flex items-start gap-1 pb-1">
+          <div className="text-[10px] text-slate-400 font-medium leading-relaxed max-w-md flex items-start gap-1">
             <Info size={13} className="text-slate-400 shrink-0 mt-0.5" />
-            <p>O filtro de dioptrias faz correspondência exata. Use os botões <Plus size={10} className="inline m-0.5" /> e <Minus size={10} className="inline m-0.5" /> para ajustar os valores em escala de 0,25 dioptrias.</p>
+            <p>O filtro de dioptrias faz correspondência exata. Use os botões <Plus size={10} className="inline m-0.5" /> e <Minus size={10} className="inline m-0.5" /> para ajustar os valores e depois clique em <strong className="text-slate-500">Pesquisar Dioptria</strong> ou pressione <strong className="text-slate-500">Enter</strong>.</p>
           </div>
         </div>
       </div>
