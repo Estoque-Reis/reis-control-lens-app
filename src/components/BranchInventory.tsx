@@ -217,7 +217,7 @@ export default function BranchInventory() {
     if (appliedEsfFilter) {
       const filterEsfVal = parseFloat(appliedEsfFilter.replace(',', '.')) || 0;
       const finalFilterEsf = appliedEsfSign === '-' ? -filterEsfVal : filterEsfVal;
-      if (item.spherical !== finalFilterEsf) {
+      if (Number(item.spherical) !== finalFilterEsf) {
         return false;
       }
     }
@@ -225,7 +225,7 @@ export default function BranchInventory() {
     // 5. Cilíndrico
     if (appliedCilFilter) {
       const filterCilVal = -Math.abs(parseFloat(appliedCilFilter.replace(',', '.')) || 0); // cylindrical is always negative
-      if (item.cylindrical !== filterCilVal) {
+      if (Number(item.cylindrical) !== filterCilVal) {
         return false;
       }
     }
