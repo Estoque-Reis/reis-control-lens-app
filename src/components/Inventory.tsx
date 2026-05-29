@@ -169,8 +169,11 @@ export default function Inventory() {
     
     let num = parseFloat(esfVal.replace(',', '.')) || 0;
     
+    if (num < 0) {
+      setEsfSign('-');
+      num = Math.abs(num);
+    }
     if (num > 2.0) num = 2.0;
-    if (num < 0) num = 0;
     
     num = Math.round(num * 4) / 4;
     setRefSearch(prev => ({ ...prev, esf: num.toFixed(2).replace('.', ',') }));
@@ -248,6 +251,7 @@ export default function Inventory() {
   useEffect(() => {
     fetchBranches();
     fetchFamilies();
+    fetchAllSkus();
   }, []);
 
   const fetchFamilies = async () => {
@@ -268,18 +272,21 @@ export default function Inventory() {
         const invRef = doc(db, 'inventory', selectedItem.id);
         const invDoc = await transaction.get(invRef);
         
-        if (!invDoc.exists()) {
-          throw new Error("Documento não encontrado!");
+        let currentQty = 0;
+        if (invDoc.exists()) {
+          currentQty = invDoc.data().quantity || 0;
         }
 
-        const newQty = invDoc.data().quantity + finalQty;
+        const newQty = currentQty + finalQty;
         if (newQty < 0) throw new Error("Estoque insuficiente!");
 
-        // Update inventory
-        transaction.update(invRef, {
+        // Update inventory (creates document if doesn't exist yet via set with merge)
+        transaction.set(invRef, {
+          branch_id: selectedItem.branch_id,
+          sku_id: selectedItem.sku_id,
           quantity: newQty,
           updated_at: serverTimestamp()
-        });
+        }, { merge: true });
 
         // Create movement log
         const movRef = doc(collection(db, 'movements'));
@@ -831,15 +838,26 @@ export default function Inventory() {
                         <div 
                           key={`${esf}_${cil}`} 
                           className={cn(
-                            "bg-white p-3 text-sm font-bold text-center relative transition-colors group",
-                            isAdmin ? "hover:bg-slate-50 cursor-pointer" : "cursor-default",
+                            "bg-white p-3 text-sm font-bold text-center relative transition-colors group cursor-pointer hover:bg-slate-50",
                             totalQty === 0 ? "text-slate-200" : (totalQty <= minStock ? "text-red-500" : "text-brand-teal")
                           )}
                           onClick={() => {
-                            if (matchingItems.length > 0 && isAdmin) {
-                              setSelectedItem(matchingItems[0]);
-                              setShowModal('entry');
-                            }
+                            // Set the filters matching this cell's dioptre values
+                            const numericEsf = parseFloat(esf);
+                            const newEsfSign = numericEsf < 0 ? '-' : '+';
+                            const rawEsf = Math.abs(numericEsf).toFixed(2).replace('.', ',');
+                            const rawCil = Math.abs(parseFloat(cil)).toFixed(2).replace('.', ',');
+                            
+                            setEsfSign(newEsfSign);
+                            setRefSearch({ esf: rawEsf, cil: rawCil });
+                            
+                            setAppliedRefSearch({
+                              esf: rawEsf,
+                              cil: rawCil,
+                              esfSign: newEsfSign
+                            });
+                            setIsFilterActive(true);
+                            setViewMode('list');
                           }}
                         >
                           {totalQty > 0 ? totalQty : '—'}

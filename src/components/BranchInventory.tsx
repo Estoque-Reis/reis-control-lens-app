@@ -247,8 +247,11 @@ export default function BranchInventory() {
     
     let num = parseFloat(esfVal.replace(',', '.')) || 0;
     
+    if (num < 0) {
+      setEsfSign('-');
+      num = Math.abs(num);
+    }
     if (num > 2.0) num = 2.0;
-    if (num < 0) num = 0;
     
     num = Math.round(num * 4) / 4;
     setEsfFilter(num.toFixed(2).replace('.', ','));
@@ -858,9 +861,28 @@ export default function BranchInventory() {
                             <div 
                               key={`${esf}_${cil}`} 
                               className={cn(
-                                "bg-white p-3 text-center relative transition-colors group flex flex-col items-center justify-center min-h-[85px] w-full",
+                                "bg-white p-3 text-center relative transition-colors group flex flex-col items-center justify-center min-h-[85px] w-full cursor-pointer hover:bg-slate-50",
                                 totalQty === 0 ? "text-slate-200" : "text-brand-teal"
                               )}
+                              onClick={() => {
+                                // Set the filters matching this cell's dioptre values
+                                const numericEsf = parseFloat(esf);
+                                const newEsfSign = numericEsf < 0 ? '-' : '+';
+                                const rawEsf = Math.abs(numericEsf).toFixed(2).replace('.', ',');
+                                const rawCil = Math.abs(parseFloat(cil)).toFixed(2).replace('.', ',');
+                                
+                                setEsfSign(newEsfSign);
+                                setEsfFilter(rawEsf);
+                                setCilFilter(rawCil);
+                                
+                                setAppliedEsfFilter(rawEsf);
+                                setAppliedCilFilter(rawCil);
+                                setAppliedEsfSign(newEsfSign);
+                                
+                                // Switch to list view to inspect the items
+                                setViewMode('list');
+                                setCurrentPage(1);
+                              }}
                             >
                               {totalQty > 0 ? (
                                 <div className="flex flex-col items-center justify-center space-y-1 w-full">
