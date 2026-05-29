@@ -21,7 +21,7 @@ import {
 import { db, getCachedBranches, getCachedFamilies, getCachedSkus } from '@/src/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { Branch, LensFamily, LensSku } from '@/src/types';
-import { cn, formatRefraction } from '@/src/lib/utils';
+import { cn, formatRefraction, generateSkuCode } from '@/src/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -352,11 +352,68 @@ export default function BranchInventory() {
     return true;
   });
 
+  const displayedSkusList = React.useMemo(() => {
+    // If no dioptre filter (quick filter) is active, just return filteredSkusList
+    if (!appliedEsfFilter && !appliedCilFilter) {
+      return filteredSkusList;
+    }
+
+    // Otherwise, we are querying dioptre. Let's make sure all families are represented
+    const cleanEsfFilter = appliedEsfFilter.replace(',', '.').trim();
+    const esfSearch = parseFloat(`${appliedEsfSign === '-' ? '-' : ''}${cleanEsfFilter}`) || 0;
+    
+    const cleanCilFilter = appliedCilFilter.replace(',', '.').trim();
+    const cilSearch = -Math.abs(parseFloat(cleanCilFilter) || 0);
+
+    // Filter families that match the selection
+    const targetFamilies = families.filter(f => {
+      const matchFamily = !selectedLine || f.line === selectedLine;
+      const matchManufacturer = !selectedManufacturer || f.manufacturer === selectedManufacturer;
+      const matchSearch = !searchQuery || 
+        f.manufacturer.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        f.line.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchFamily && matchManufacturer && matchSearch;
+    });
+
+    return targetFamilies.map(f => {
+      // Find if we have an existing item for this family and dioptre
+      const existing = filteredSkusList.find(sku => 
+        sku.family_id === f.id &&
+        Math.abs((sku.spherical || 0) - esfSearch) < 0.01 &&
+        Math.abs((sku.cylindrical || 0) - cilSearch) < 0.01
+      );
+
+      if (existing) {
+        return existing;
+      }
+
+      // If no existing mapping, generate a virtual placeholder
+      const branchQtys: Record<string, number> = {};
+      branches.forEach(b => {
+        branchQtys[b.id] = 0;
+      });
+
+      const skuCode = generateSkuCode(f.line, esfSearch, cilSearch);
+      return {
+        id: `virtual_sku_${f.id}_${esfSearch}_${cilSearch}`,
+        family_id: f.id,
+        sku_code: skuCode,
+        spherical: esfSearch,
+        cylindrical: cilSearch,
+        family: f,
+        branchQtys,
+        totalQty: 0,
+        isVirtual: true,
+        created_at: new Date().toISOString()
+      };
+    });
+  }, [filteredSkusList, families, appliedEsfFilter, appliedCilFilter, appliedEsfSign, selectedLine, selectedManufacturer, searchQuery, branches]);
+
   // Pagination calculations
-  const totalItems = filteredSkusList.length;
+  const totalItems = displayedSkusList.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedSkusList = filteredSkusList.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedSkusList = displayedSkusList.slice(startIndex, startIndex + itemsPerPage);
 
   const handlePageChange = (p: number) => {
     if (p >= 1 && p <= totalPages) {
@@ -682,7 +739,7 @@ export default function BranchInventory() {
         <div className="flex items-center gap-2.5 flex-wrap">
           <Package size={18} className="text-slate-400 font-bold" />
           <span className="text-sm font-bold text-slate-700">
-            {filteredSkusList.length === 1 ? '1 resultado encontrado' : `${filteredSkusList.length} resultados encontrados`}
+            {displayedSkusList.length === 1 ? '1 resultado encontrado' : `${displayedSkusList.length} resultados encontrados`}
           </span>
           {(appliedEsfFilter || appliedCilFilter) && (
             <span className="px-2.5 py-0.5 text-[10px] font-black bg-teal-50 text-teal-700 border border-teal-100 rounded-full flex items-center gap-1.5">
@@ -729,7 +786,7 @@ export default function BranchInventory() {
             <div className="animate-spin rounded-full h-10 w-10 border-2 border-brand-teal border-b-transparent mx-auto"></div>
             <p className="text-slate-400 text-sm font-medium">Buscando estoques integrados das lojas...</p>
           </div>
-        ) : filteredSkusList.length === 0 ? (
+        ) : displayedSkusList.length === 0 ? (
           <div className="p-16 text-center">
             <Building2 size={44} className="text-slate-300 mx-auto mb-4" />
             <h4 className="font-extrabold text-slate-700 text-lg">Nenhum estoque correspondente encontrado</h4>

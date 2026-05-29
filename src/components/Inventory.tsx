@@ -18,7 +18,7 @@ import { db, auth, getCachedBranches, getCachedFamilies, getCachedSkus } from '@
 import { collection, getDocs, query, where, doc, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useAuth } from '@/src/hooks/useAuth';
 import { LensSku, InventoryItem, Branch, LensFamily } from '@/src/types';
-import { cn, formatRefraction } from '@/src/lib/utils';
+import { cn, formatRefraction, generateSkuCode } from '@/src/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Inventory() {
@@ -432,6 +432,62 @@ export default function Inventory() {
     return matchSearch && matchEsf && matchCil && matchFamily;
   });
 
+  const displayedItems = React.useMemo(() => {
+    // If no dioptre filter (quick filter) is active, just return filteredItems
+    if (!appliedRefSearch.esf && !appliedRefSearch.cil) {
+      return filteredItems;
+    }
+
+    // Otherwise, we are querying dioptre. Let's make sure all families are represented
+    const cleanEsfSearch = appliedRefSearch.esf.replace(',', '.').trim();
+    const esfSearch = parseFloat(`${appliedRefSearch.esfSign === '-' ? '-' : ''}${cleanEsfSearch}`) || 0;
+    
+    const cleanCilSearch = appliedRefSearch.cil.replace(',', '.').trim();
+    const cilSearch = -Math.abs(parseFloat(cleanCilSearch) || 0);
+
+    // Filter families that match the family selection (if any) and search query
+    const targetFamilies = families.filter(f => {
+      const matchFamily = !selectedFamily || f.id === selectedFamily;
+      const matchSearch = !searchQuery || 
+        f.manufacturer.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        f.line.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchFamily && matchSearch;
+    });
+
+    return targetFamilies.map(f => {
+      // Find if we have an existing item for this family and dioptre
+      const existing = filteredItems.find(item => 
+        item.sku?.family_id === f.id &&
+        Math.abs((item.sku?.spherical || 0) - esfSearch) < 0.01 &&
+        Math.abs((item.sku?.cylindrical || 0) - cilSearch) < 0.01
+      );
+
+      if (existing) {
+        return existing;
+      }
+
+      // If no existing mapping, generate a virtual placeholder
+      const branchId = selectedBranch || profile?.branch_id || 'global';
+      const skuCode = generateSkuCode(f.line, esfSearch, cilSearch);
+      return {
+        id: `virtual_${f.id}_${esfSearch}_${cilSearch}`,
+        branch_id: branchId,
+        sku_id: `virtual_sku_${f.id}`,
+        quantity: 0,
+        sku: {
+          id: `virtual_sku_${f.id}`,
+          family_id: f.id,
+          sku_code: skuCode,
+          spherical: esfSearch,
+          cylindrical: cilSearch,
+          family: f
+        },
+        isVirtual: true,
+        updated_at: new Date().toISOString()
+      };
+    });
+  }, [filteredItems, families, appliedRefSearch, selectedFamily, searchQuery, selectedBranch, profile]);
+
   const isAdmin = profile?.role === 'admin';
 
   return (
@@ -660,7 +716,7 @@ export default function Inventory() {
         <div className="flex items-center gap-2.5">
           <Package size={18} className="text-slate-400 font-bold" />
           <span className="text-sm font-bold text-slate-700">
-            {filteredItems.length === 1 ? '1 resultado encontrado' : `${filteredItems.length} resultados encontrados`}
+            {displayedItems.length === 1 ? '1 resultado encontrado' : `${displayedItems.length} resultados encontrados`}
           </span>
           {isFilterActive && (
             <span className="px-2.5 py-0.5 text-[10px] font-black bg-teal-50 text-teal-700 border border-teal-100 rounded-full flex items-center gap-1.5">
@@ -703,7 +759,7 @@ export default function Inventory() {
                       <td colSpan={6} className="px-6 py-8 bg-white"></td>
                     </tr>
                   ))
-                ) : filteredItems.length === 0 ? (
+                ) : displayedItems.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-12 text-center text-slate-400 flex flex-col items-center">
                       <Package size={48} className="mb-4 opacity-20" />
@@ -711,7 +767,7 @@ export default function Inventory() {
                     </td>
                   </tr>
                 ) : (
-                  filteredItems.map((item) => {
+                  displayedItems.map((item) => {
                     if (!item) return null;
                     return (
                       <tr key={item.id} className="hover:bg-slate-50 transition-colors group">
