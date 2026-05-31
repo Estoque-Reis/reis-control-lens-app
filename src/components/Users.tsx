@@ -97,9 +97,16 @@ export default function UsersList() {
 
     setSaving(true);
     try {
+      const isMaster = formData.email.toLowerCase() === 'paulo_ricardo_reis@hotmail.com';
+      const finalRole = isMaster ? 'admin' : 'consultor';
+      const savedData = {
+        ...formData,
+        role: finalRole as 'admin' | 'consultor'
+      };
+
       if (editingUser) {
         await updateDoc(doc(db, 'profiles', editingUser.id), {
-          ...formData,
+          ...savedData,
           updated_at: new Date().toISOString()
         });
         alert("Usuário atualizado com sucesso!");
@@ -108,7 +115,7 @@ export default function UsersList() {
         // But it allows pre-creating profiles
         const id = formData.email.replace(/[^a-zA-Z0-9]/g, '_');
         await setDoc(doc(db, 'profiles', id), {
-          ...formData,
+          ...savedData,
           created_at: new Date().toISOString()
         });
         alert("Perfil criado! O usuário deve se cadastrar com este e-mail.");

@@ -329,8 +329,11 @@ export default function BranchInventory() {
     // 4. Esférico
     if (appliedEsfFilter) {
       const cleanEsfFilter = appliedEsfFilter.replace(',', '.').trim();
-      const finalFilterEsf = parseFloat(`${appliedEsfSign === '-' ? '-' : ''}${cleanEsfFilter}`);
-      if (!isNaN(finalFilterEsf) && Math.abs(item.spherical - finalFilterEsf) > 0.01) {
+      const magnitudeEsf = cleanEsfFilter.replace(/^[+-]/, '').trim();
+      const parsedEsf = parseFloat(magnitudeEsf) || 0;
+      const finalFilterEsf = (appliedEsfSign === '-' || cleanEsfFilter.startsWith('-')) ? -parsedEsf : parsedEsf;
+      
+      if (Math.abs(item.spherical - finalFilterEsf) > 0.01) {
         return false;
       }
     }
@@ -338,7 +341,10 @@ export default function BranchInventory() {
     // 5. Cilíndrico
     if (appliedCilFilter) {
       const cleanCilFilter = appliedCilFilter.replace(',', '.').trim();
-      const filterCilVal = -Math.abs(parseFloat(cleanCilFilter) || 0); // cylindrical is always negative
+      const magnitudeCil = cleanCilFilter.replace(/^[+-]/, '').trim();
+      const parsedCil = parseFloat(magnitudeCil) || 0;
+      const filterCilVal = -Math.abs(parsedCil); // cylindrical is always negative
+      
       if (Math.abs(item.cylindrical - filterCilVal) > 0.01) {
         return false;
       }
@@ -360,10 +366,14 @@ export default function BranchInventory() {
 
     // Otherwise, we are querying dioptre. Let's make sure all families are represented
     const cleanEsfFilter = appliedEsfFilter.replace(',', '.').trim();
-    const esfSearch = parseFloat(`${appliedEsfSign === '-' ? '-' : ''}${cleanEsfFilter}`) || 0;
+    const magnitudeEsf = cleanEsfFilter.replace(/^[+-]/, '').trim();
+    const parsedEsf = parseFloat(magnitudeEsf) || 0;
+    const esfSearch = (appliedEsfSign === '-' || cleanEsfFilter.startsWith('-')) ? -parsedEsf : parsedEsf;
     
     const cleanCilFilter = appliedCilFilter.replace(',', '.').trim();
-    const cilSearch = -Math.abs(parseFloat(cleanCilFilter) || 0);
+    const magnitudeCil = cleanCilFilter.replace(/^[+-]/, '').trim();
+    const parsedCil = parseFloat(magnitudeCil) || 0;
+    const cilSearch = -Math.abs(parsedCil);
 
     // Filter families that match the selection
     const targetFamilies = families.filter(f => {

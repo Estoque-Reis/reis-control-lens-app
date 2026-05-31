@@ -44,7 +44,7 @@ export default function Login() {
               }
             }
 
-            const finalRole = isMasterUser ? 'admin' : (preProfileData.role || 'consultor');
+            const finalRole = isMasterUser ? 'admin' : 'consultor';
 
             try {
               await setDoc(docRef, {
@@ -123,9 +123,8 @@ export default function Login() {
             console.warn('Could not read pre-existing profile:', err);
           }
 
-          // Force non-master self-created users to be 'consultor' unless preProfileData specifies otherwise
           const isMaster = email.toLowerCase() === ALLOWED_EMAIL.toLowerCase();
-          const finalRole = isMaster ? 'admin' : (preProfileData.role || 'consultor');
+          const finalRole = isMaster ? 'admin' : 'consultor';
 
           try {
             await setDoc(doc(db, 'profiles', firebaseUser.uid), {
@@ -168,7 +167,7 @@ export default function Login() {
               }
             }
 
-            const finalRole = isMasterUser ? 'admin' : (preProfileData.role || 'consultor');
+            const finalRole = isMasterUser ? 'admin' : 'consultor';
 
             await setDoc(docRef, {
               full_name: preProfileData.full_name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuário',
@@ -249,7 +248,7 @@ export default function Login() {
           }
         }
 
-        const finalRole = isMasterUser ? 'admin' : (preProfileData.role || 'consultor');
+        const finalRole = isMasterUser ? 'admin' : 'consultor';
 
         try {
           await setDoc(docRef, {

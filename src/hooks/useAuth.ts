@@ -27,9 +27,14 @@ export function useAuth() {
           doc(db, 'profiles', firebaseUser.uid),
           (docSnap) => {
             if (docSnap.exists()) {
+              const data = docSnap.data();
+              const isMaster = (firebaseUser.email && firebaseUser.email.toLowerCase() === 'paulo_ricardo_reis@hotmail.com') ||
+                               (data.email && data.email.toLowerCase() === 'paulo_ricardo_reis@hotmail.com');
+              
               setProfile({
                 id: docSnap.id,
-                ...docSnap.data()
+                ...data,
+                role: isMaster ? 'admin' : 'consultor'
               } as Profile);
             } else {
               setProfile(null);

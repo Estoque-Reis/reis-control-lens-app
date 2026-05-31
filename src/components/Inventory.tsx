@@ -403,10 +403,14 @@ export default function Inventory() {
 
     // Dioptre filtering logic based on applied search
     const cleanEsfSearch = appliedRefSearch.esf.replace(',', '.').trim();
-    const esfSearch = parseFloat(`${appliedRefSearch.esfSign === '-' ? '-' : ''}${cleanEsfSearch}`);
+    const magnitudeEsf = cleanEsfSearch.replace(/^[+-]/, '').trim();
+    const parsedEsf = parseFloat(magnitudeEsf) || 0;
+    const esfSearch = (appliedRefSearch.esfSign === '-' || cleanEsfSearch.startsWith('-')) ? -parsedEsf : parsedEsf;
     
     const cleanCilSearch = appliedRefSearch.cil.replace(',', '.').trim();
-    const cilSearch = -Math.abs(parseFloat(cleanCilSearch) || 0);
+    const magnitudeCil = cleanCilSearch.replace(/^[+-]/, '').trim();
+    const parsedCil = parseFloat(magnitudeCil) || 0;
+    const cilSearch = -Math.abs(parsedCil);
 
     let itemSpherical = 0;
     if (sku.spherical !== undefined && sku.spherical !== null) {
@@ -426,8 +430,8 @@ export default function Inventory() {
       }
     }
 
-    const matchEsf = !appliedRefSearch.esf || isNaN(esfSearch) || Math.abs(itemSpherical - esfSearch) < 0.01;
-    const matchCil = !appliedRefSearch.cil || isNaN(cilSearch) || Math.abs(itemCylindrical - cilSearch) < 0.01;
+    const matchEsf = !appliedRefSearch.esf || Math.abs(itemSpherical - esfSearch) < 0.01;
+    const matchCil = !appliedRefSearch.cil || Math.abs(itemCylindrical - cilSearch) < 0.01;
 
     return matchSearch && matchEsf && matchCil && matchFamily;
   });
@@ -440,10 +444,14 @@ export default function Inventory() {
 
     // Otherwise, we are querying dioptre. Let's make sure all families are represented
     const cleanEsfSearch = appliedRefSearch.esf.replace(',', '.').trim();
-    const esfSearch = parseFloat(`${appliedRefSearch.esfSign === '-' ? '-' : ''}${cleanEsfSearch}`) || 0;
+    const magnitudeEsf = cleanEsfSearch.replace(/^[+-]/, '').trim();
+    const parsedEsf = parseFloat(magnitudeEsf) || 0;
+    const esfSearch = (appliedRefSearch.esfSign === '-' || cleanEsfSearch.startsWith('-')) ? -parsedEsf : parsedEsf;
     
     const cleanCilSearch = appliedRefSearch.cil.replace(',', '.').trim();
-    const cilSearch = -Math.abs(parseFloat(cleanCilSearch) || 0);
+    const magnitudeCil = cleanCilSearch.replace(/^[+-]/, '').trim();
+    const parsedCil = parseFloat(magnitudeCil) || 0;
+    const cilSearch = -Math.abs(parsedCil);
 
     // Filter families that match the family selection (if any) and search query
     const targetFamilies = families.filter(f => {
