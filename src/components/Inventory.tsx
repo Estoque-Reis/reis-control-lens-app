@@ -389,8 +389,8 @@ export default function Inventory() {
     const sku = item?.sku;
     if (!sku) return false;
     
-    const skuCode = sku.sku_code || '';
-    const manufacturer = sku.family?.manufacturer || '';
+    const skuCode = String(sku?.sku_code || '');
+    const manufacturer = String(sku?.family?.manufacturer || '');
     
     // Normalize both strings to match either dots or commas (e.g., -1.75 matches -1,75)
     const normalizedSkuCode = skuCode.toLowerCase().replace(/,/g, '.');
@@ -457,8 +457,8 @@ export default function Inventory() {
     const targetFamilies = families.filter(f => {
       const matchFamily = !selectedFamily || f.id === selectedFamily;
       const matchSearch = !searchQuery || 
-        f.manufacturer.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        f.line.toLowerCase().includes(searchQuery.toLowerCase());
+        String(f?.manufacturer || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        String(f?.line || '').toLowerCase().includes(searchQuery.toLowerCase());
       return matchFamily && matchSearch;
     });
 

@@ -319,11 +319,11 @@ export default function Reports() {
   const filteredSimData = simulatorData.filter(item => {
     const s = searchQuery.toLowerCase();
     const matchesSearch = 
-      item.sku_code.toLowerCase().includes(s) ||
-      item.origin_branch_name.toLowerCase().includes(s) ||
-      item.destination_branch_name.toLowerCase().includes(s) ||
-      item.manufacturer.toLowerCase().includes(s) ||
-      item.line.toLowerCase().includes(s);
+      String(item?.sku_code || '').toLowerCase().includes(s) ||
+      String(item?.origin_branch_name || '').toLowerCase().includes(s) ||
+      String(item?.destination_branch_name || '').toLowerCase().includes(s) ||
+      String(item?.manufacturer || '').toLowerCase().includes(s) ||
+      String(item?.line || '').toLowerCase().includes(s);
 
     const matchesRupture = !filterRupturesOnly || item.is_absolute_rupture;
 

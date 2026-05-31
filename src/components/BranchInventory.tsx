@@ -309,7 +309,8 @@ export default function BranchInventory() {
   }).filter(item => {
     // 1. Search Query (SKU Code with comma/dot normalization)
     if (searchQuery) {
-      const normalizedSkuCode = item.sku_code.toLowerCase().replace(/,/g, '.');
+      const skuCode = String(item?.sku_code || '');
+      const normalizedSkuCode = skuCode.toLowerCase().replace(/,/g, '.');
       const normalizedSearchQuery = searchQuery.toLowerCase().replace(/,/g, '.');
       if (!normalizedSkuCode.includes(normalizedSearchQuery)) {
         return false;
@@ -380,8 +381,8 @@ export default function BranchInventory() {
       const matchFamily = !selectedLine || f.line === selectedLine;
       const matchManufacturer = !selectedManufacturer || f.manufacturer === selectedManufacturer;
       const matchSearch = !searchQuery || 
-        f.manufacturer.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        f.line.toLowerCase().includes(searchQuery.toLowerCase());
+        String(f?.manufacturer || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        String(f?.line || '').toLowerCase().includes(searchQuery.toLowerCase());
       return matchFamily && matchManufacturer && matchSearch;
     });
 

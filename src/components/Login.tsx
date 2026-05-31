@@ -30,35 +30,31 @@ export default function Login() {
           const docSnap = await getDoc(docRef);
           const isMasterUser = user.email?.toLowerCase() === ALLOWED_EMAIL.toLowerCase();
 
-          if (!docSnap.exists() || isMasterUser) {
-            const emailId = user.email ? user.email.replace(/[^a-zA-Z0-9]/g, '_') : '';
-            let preProfileData: any = {};
-            if (emailId) {
-              try {
-                const preDoc = await getDoc(doc(db, 'profiles', emailId));
-                if (preDoc.exists()) {
-                  preProfileData = preDoc.data();
-                }
-              } catch (err) {
-                console.warn('Could not read preprofile on google redirect login:', err);
-              }
-            }
-
-            const finalRole = isMasterUser ? 'admin' : 'consultor';
-
+          const emailId = user.email ? user.email.replace(/[^a-zA-Z0-9]/g, '_') : '';
+          let preProfileData: any = {};
+          if (emailId) {
             try {
-              await setDoc(docRef, {
-                full_name: preProfileData.full_name || user.displayName || user.email?.split('@')[0] || 'Usuário',
-                email: user.email,
-                role: finalRole,
-                status: preProfileData.status || 'active',
-                branch_id: preProfileData.branch_id || '',
-                updated_at: new Date().toISOString(),
-                ...(docSnap.exists() ? {} : { created_at: preProfileData.created_at || new Date().toISOString() })
-              }, { merge: true });
-            } catch (writeErr) {
-              handleFirestoreError(writeErr, OperationType.WRITE, `profiles/${user.uid}`);
+              const preDoc = await getDoc(doc(db, 'profiles', emailId));
+              if (preDoc.exists()) {
+                preProfileData = preDoc.data();
+              }
+            } catch (err) {
+              console.warn('Could not read preprofile on google redirect login:', err);
             }
+          }
+
+          try {
+            await setDoc(docRef, {
+              full_name: preProfileData.full_name || user.displayName || user.email?.split('@')[0] || 'Usuário',
+              email: user.email,
+              role: 'consultor', // Always consultor for Google login
+              status: preProfileData.status || 'active',
+              branch_id: preProfileData.branch_id || '',
+              updated_at: new Date().toISOString(),
+              ...(docSnap.exists() ? {} : { created_at: preProfileData.created_at || new Date().toISOString() })
+            }, { merge: true });
+          } catch (writeErr) {
+            handleFirestoreError(writeErr, OperationType.WRITE, `profiles/${user.uid}`);
           }
         }
       } catch (err: any) {
@@ -234,35 +230,31 @@ export default function Login() {
       const docSnap = await getDoc(docRef);
       const isMasterUser = user.email?.toLowerCase() === ALLOWED_EMAIL.toLowerCase();
       
-      if (!docSnap.exists() || isMasterUser) {
-        const emailId = user.email ? user.email.replace(/[^a-zA-Z0-9]/g, '_') : '';
-        let preProfileData: any = {};
-        if (emailId) {
-          try {
-            const preDoc = await getDoc(doc(db, 'profiles', emailId));
-            if (preDoc.exists()) {
-              preProfileData = preDoc.data();
-            }
-          } catch (err) {
-            console.warn('Could not read preprofile on google login:', err);
-          }
-        }
-
-        const finalRole = isMasterUser ? 'admin' : 'consultor';
-
+      const emailId = user.email ? user.email.replace(/[^a-zA-Z0-9]/g, '_') : '';
+      let preProfileData: any = {};
+      if (emailId) {
         try {
-          await setDoc(docRef, {
-            full_name: preProfileData.full_name || user.displayName || user.email?.split('@')[0] || 'Usuário',
-            email: user.email,
-            role: finalRole, // Only master or pre-registered can have non-consultant roles
-            status: preProfileData.status || 'active',
-            branch_id: preProfileData.branch_id || '',
-            updated_at: new Date().toISOString(),
-            ...(docSnap.exists() ? {} : { created_at: preProfileData.created_at || new Date().toISOString() })
-          }, { merge: true });
-        } catch (writeErr) {
-          handleFirestoreError(writeErr, OperationType.WRITE, `profiles/${user.uid}`);
+          const preDoc = await getDoc(doc(db, 'profiles', emailId));
+          if (preDoc.exists()) {
+            preProfileData = preDoc.data();
+          }
+        } catch (err) {
+          console.warn('Could not read preprofile on google login:', err);
         }
+      }
+
+      try {
+        await setDoc(docRef, {
+          full_name: preProfileData.full_name || user.displayName || user.email?.split('@')[0] || 'Usuário',
+          email: user.email,
+          role: 'consultor', // Always consultor for Google login
+          status: preProfileData.status || 'active',
+          branch_id: preProfileData.branch_id || '',
+          updated_at: new Date().toISOString(),
+          ...(docSnap.exists() ? {} : { created_at: preProfileData.created_at || new Date().toISOString() })
+        }, { merge: true });
+      } catch (writeErr) {
+        handleFirestoreError(writeErr, OperationType.WRITE, `profiles/${user.uid}`);
       }
     } catch (err: any) {
       console.error('Google Auth error:', err);

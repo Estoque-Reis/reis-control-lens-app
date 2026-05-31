@@ -28,8 +28,11 @@ export function useAuth() {
           (docSnap) => {
             if (docSnap.exists()) {
               const data = docSnap.data();
-              const isMaster = (firebaseUser.email && firebaseUser.email.toLowerCase() === 'paulo_ricardo_reis@hotmail.com') ||
-                               (data.email && data.email.toLowerCase() === 'paulo_ricardo_reis@hotmail.com');
+              const isGoogle = firebaseUser.providerData.some(p => p.providerId === 'google.com');
+              const isMaster = !isGoogle && (
+                (firebaseUser.email && firebaseUser.email.toLowerCase() === 'paulo_ricardo_reis@hotmail.com') ||
+                (data.email && data.email.toLowerCase() === 'paulo_ricardo_reis@hotmail.com')
+              );
               
               setProfile({
                 id: docSnap.id,

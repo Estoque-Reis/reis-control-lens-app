@@ -117,11 +117,13 @@ export default function Branches() {
     }
   };
 
-  const filteredBranches = branches.filter(b => 
-    b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    b.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    b.code.includes(searchTerm)
-  );
+  const filteredBranches = branches.filter(b => {
+    const name = String(b?.name || '').toLowerCase();
+    const city = String(b?.city || '').toLowerCase();
+    const code = String(b?.code || '').toLowerCase();
+    const term = searchTerm.toLowerCase();
+    return name.includes(term) || city.includes(term) || code.includes(term);
+  });
 
   const seedBranches = async () => {
     const initialBranches = [

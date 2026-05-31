@@ -218,10 +218,12 @@ export default function LensFamilies() {
     });
   };
 
-  const filteredFamilies = families.filter(f => 
-    f.line.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    f.manufacturer.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredFamilies = families.filter(f => {
+    const line = String(f?.line || '').toLowerCase();
+    const manufacturer = String(f?.manufacturer || '').toLowerCase();
+    const term = searchTerm.toLowerCase();
+    return line.includes(term) || manufacturer.includes(term);
+  });
 
   const [generatingGridId, setGeneratingGridId] = useState<string | null>(null);
 

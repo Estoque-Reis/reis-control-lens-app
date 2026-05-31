@@ -90,7 +90,7 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
       icon: Package, 
       roles: ['admin', 'consultor'],
       subItems: [
-        { id: 'inventory', label: 'Estoque Geral', roles: ['admin', 'consultor'] },
+        { id: 'inventory', label: 'Estoque Geral', roles: ['admin'] },
         { id: 'branch_inventory', label: 'Estoque por Filial', roles: ['admin', 'consultor'] },
         { id: 'purchase_suggestions', label: 'Sugestão de Compra', roles: ['admin'] }
       ]

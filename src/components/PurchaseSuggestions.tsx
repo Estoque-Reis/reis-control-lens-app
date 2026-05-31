@@ -179,7 +179,7 @@ export default function PurchaseSuggestions() {
     if (selectedManufacturer && item.manufacturer !== selectedManufacturer) {
       return false;
     }
-    if (searchQuery && !item.sku_code.toLowerCase().includes(searchQuery.toLowerCase())) {
+    if (searchQuery && !String(item?.sku_code || '').toLowerCase().includes(searchQuery.toLowerCase())) {
       return false;
     }
     return true;

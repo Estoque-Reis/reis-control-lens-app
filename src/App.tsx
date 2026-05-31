@@ -42,7 +42,7 @@ export default function App() {
 
     if (profile && profile.role !== prevRole) {
       setPrevRole(profile.role);
-      setCurrentRoute(profile.role === 'admin' ? 'dashboard' : 'inventory');
+      setCurrentRoute(profile.role === 'admin' ? 'dashboard' : 'branch_inventory');
     }
   }, [user, profile, prevRole]);
 
@@ -88,12 +88,12 @@ export default function App() {
   }
 
   // Resolve active route immediately on render to prevent any admin screen flashes
-  const activeRoute = currentRoute || (profile.role === 'admin' ? 'dashboard' : 'inventory');
+  const activeRoute = currentRoute || (profile.role === 'admin' ? 'dashboard' : 'branch_inventory');
 
-  // Strict route protection for consultor (can only access inventory & branch_inventory)
+  // Strict route protection for consultor (can only access branch_inventory)
   const isConsultor = profile?.role === 'consultor';
-  const effectiveRoute = (isConsultor && activeRoute !== 'inventory' && activeRoute !== 'branch_inventory') 
-    ? 'inventory' 
+  const effectiveRoute = (isConsultor && activeRoute !== 'branch_inventory') 
+    ? 'branch_inventory' 
     : activeRoute;
 
   const renderContent = () => {
