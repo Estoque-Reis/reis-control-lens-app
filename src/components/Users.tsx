@@ -98,7 +98,7 @@ export default function UsersList() {
     setSaving(true);
     try {
       const isMaster = formData.email.toLowerCase() === 'paulo_ricardo_reis@hotmail.com';
-      const finalRole = isMaster ? 'admin' : 'consultor';
+      const finalRole = isMaster ? 'admin' : formData.role;
       const savedData = {
         ...formData,
         role: finalRole as 'admin' | 'consultor'

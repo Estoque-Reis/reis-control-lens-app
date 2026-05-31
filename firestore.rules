@@ -34,7 +34,7 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isMasterUser();
+      return isMasterUser() || (isSignedIn() && exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin');
     }
 
     function isMasterUser() {
@@ -45,6 +45,7 @@ service cloud.firestore {
     match /profiles/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       allow list: if isAdmin();
+      allow delete: if isAdmin();
 
       function isValidProfile(data) {
         return data.keys().hasAll(['email', 'role', 'status']) &&
@@ -53,9 +54,10 @@ service cloud.firestore {
                data.status in ['active', 'inactive'];
       }
 
-      allow create: if isSignedIn() && request.auth.uid == userId && 
-                    isValidProfile(incoming()) && 
-                    (incoming().role == 'consultor' || isMasterUser()); 
+      allow create: if isSignedIn() && (
+                      (request.auth.uid == userId && (incoming().role == 'consultor' || isMasterUser())) || 
+                      isAdmin()
+                    ) && isValidProfile(incoming()); 
 
       allow update: if isSignedIn() && (
         (request.auth.uid == userId && (

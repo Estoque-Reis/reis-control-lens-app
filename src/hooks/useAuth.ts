@@ -37,7 +37,7 @@ export function useAuth() {
               setProfile({
                 id: docSnap.id,
                 ...data,
-                role: isMaster ? 'admin' : 'consultor'
+                role: isMaster ? 'admin' : (data.role || 'consultor')
               } as Profile);
             } else {
               setProfile(null);
