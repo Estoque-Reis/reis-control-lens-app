@@ -45,9 +45,26 @@ export default function BranchInventory() {
 
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
-  // Dioptre Scales for Grid
-  const esfScale = Array.from({ length: 17 }, (_, i) => (2 - i * 0.25).toFixed(2));
-  const cilScale = Array.from({ length: 9 }, (_, i) => (-i * 0.25).toFixed(2));
+  const [gridEsfRange, setGridEsfRange] = useState<'standard' | 'positive' | 'negative'>('standard');
+  const [gridCilRange, setGridCilRange] = useState<'standard' | 'extended'>('standard');
+
+  // Dioptre Scales for Grid based on toggled range
+  const esfScale = React.useMemo(() => {
+    if (gridEsfRange === 'positive') {
+      return Array.from({ length: 25 }, (_, i) => (6 - i * 0.25).toFixed(2)); // +6.00 down to 0.00
+    }
+    if (gridEsfRange === 'negative') {
+      return Array.from({ length: 25 }, (_, i) => (-i * 0.25).toFixed(2)); // 0.00 down to -6.00
+    }
+    return Array.from({ length: 17 }, (_, i) => (2 - i * 0.25).toFixed(2)); // +2.00 down to -2.00
+  }, [gridEsfRange]);
+
+  const cilScale = React.useMemo(() => {
+    if (gridCilRange === 'extended') {
+      return Array.from({ length: 17 }, (_, i) => (-i * 0.25).toFixed(2)); // 0.00 to -4.00
+    }
+    return Array.from({ length: 9 }, (_, i) => (-i * 0.25).toFixed(2)); // 0.00 to -2.00
+  }, [gridCilRange]);
 
   // Applied filters for dioptria query
   const [appliedEsfFilter, setAppliedEsfFilter] = useState('');
@@ -131,7 +148,7 @@ export default function BranchInventory() {
         currentEsfSign = '-';
         num = Math.abs(num);
       }
-      if (num > 2.0) num = 2.0;
+      if (num > 6.0) num = 6.0;
       num = Math.round(num * 4) / 4;
       formattedEsf = num.toFixed(2).replace('.', ',');
     }
@@ -144,7 +161,7 @@ export default function BranchInventory() {
       }
       let num = parseFloat(formattedCil.replace(',', '.')) || 0;
       num = Math.abs(num); // cylindrical is always negative visual representation but store holds magnitude
-      if (num > 2.0) num = 2.0;
+      if (num > 4.0) num = 4.0;
       num = Math.round(num * 4) / 4;
       formattedCil = num.toFixed(2).replace('.', ',');
     }
@@ -193,13 +210,13 @@ export default function BranchInventory() {
     let newVal = dir === 'up' ? numeric + step : numeric - step;
 
     if (fld === 'esf') {
-      if (newVal > 2) newVal = 2;
-      if (newVal < -2) newVal = -2;
+      if (newVal > 6) newVal = 6;
+      if (newVal < -6) newVal = -6;
       setEsfSign(newVal < 0 ? '-' : '+');
       setEsfFilter(Math.abs(newVal).toFixed(2).replace('.', ','));
     } else {
       if (newVal > 0) newVal = 0;
-      if (newVal < -2) newVal = -2;
+      if (newVal < -4) newVal = -4;
       setCilFilter(Math.abs(newVal).toFixed(2).replace('.', ','));
     }
     setCurrentPage(1);
@@ -251,7 +268,7 @@ export default function BranchInventory() {
       setEsfSign('-');
       num = Math.abs(num);
     }
-    if (num > 2.0) num = 2.0;
+    if (num > 6.0) num = 6.0;
     
     num = Math.round(num * 4) / 4;
     setEsfFilter(num.toFixed(2).replace('.', ','));
@@ -267,7 +284,7 @@ export default function BranchInventory() {
     
     let num = parseFloat(cilVal.replace(',', '.')) || 0;
     
-    if (num > 2.0) num = 2.0;
+    if (num > 4.0) num = 4.0;
     if (num < 0) num = 0;
     
     num = Math.round(num * 4) / 4;
@@ -871,9 +888,77 @@ export default function BranchInventory() {
                 </tbody>
               </table>
             ) : (
-              <div className="overflow-x-auto p-6">
-                <div className="min-w-fit">
-                  <div className="grid grid-cols-[90px_repeat(9,minmax(110px,_1fr))] gap-px bg-slate-100 border border-slate-100 rounded-lg overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                {/* Grid Selection Toggles */}
+                <div className="bg-slate-50 border-b border-slate-100 p-4 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                  {/* Esférico Grid Selector */}
+                  <div className="flex flex-col gap-1.5 w-full sm:w-auto">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Faixa do Esférico (ESF)</span>
+                    <div className="flex bg-slate-200/60 p-1 rounded-xl items-center w-full sm:w-auto">
+                      <button
+                        onClick={() => setGridEsfRange('standard')}
+                        className={cn(
+                          "px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap flex-1 sm:flex-none",
+                          gridEsfRange === 'standard' ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                        )}
+                      >
+                        Padrão (+2 a -2)
+                      </button>
+                      <button
+                        onClick={() => setGridEsfRange('positive')}
+                        className={cn(
+                          "px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap flex-1 sm:flex-none",
+                          gridEsfRange === 'positive' ? "bg-emerald-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"
+                        )}
+                      >
+                        Positivo (+6 a 0)
+                      </button>
+                      <button
+                        onClick={() => setGridEsfRange('negative')}
+                        className={cn(
+                          "px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap flex-1 sm:flex-none",
+                          gridEsfRange === 'negative' ? "bg-rose-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"
+                        )}
+                      >
+                        Negativo (0 a -6)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Cilíndrico Grid Selector */}
+                  <div className="flex flex-col gap-1.5 w-full sm:w-auto">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Faixa do Cilíndrico (CIL)</span>
+                    <div className="flex bg-slate-200/60 p-1 rounded-xl items-center w-full sm:w-auto">
+                      <button
+                        onClick={() => setGridCilRange('standard')}
+                        className={cn(
+                          "px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap flex-1 sm:flex-none",
+                          gridCilRange === 'standard' ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                        )}
+                      >
+                        Padrão (0 a -2)
+                      </button>
+                      <button
+                        onClick={() => setGridCilRange('extended')}
+                        className={cn(
+                          "px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap flex-1 sm:flex-none",
+                          gridCilRange === 'extended' ? "bg-rose-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"
+                        )}
+                      >
+                        Estendido (0 a -4)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto p-6">
+                  <div className="min-w-fit">
+                    <div 
+                      className="grid gap-px bg-slate-100 border border-slate-100 rounded-lg overflow-hidden"
+                      style={{
+                        gridTemplateColumns: `90px repeat(${cilScale.length}, minmax(110px, 1fr))`
+                      }}
+                    >
                     {/* Header Row */}
                     <div className="bg-slate-50 p-4 text-[10px] font-extrabold text-slate-500 uppercase text-center flex items-center justify-center">
                       ESF \ CIL
@@ -950,7 +1035,8 @@ export default function BranchInventory() {
                   </div>
                 </div>
               </div>
-            )}
+            </div>
+          )}
           </div>
         )}
 

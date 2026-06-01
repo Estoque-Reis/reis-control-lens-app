@@ -54,7 +54,7 @@ export default function Inventory() {
         currentEsfSign = '-';
         num = Math.abs(num);
       }
-      if (num > 2.0) num = 2.0;
+      if (num > 6.0) num = 6.0;
       num = Math.round(num * 4) / 4;
       formattedEsf = num.toFixed(2).replace('.', ',');
     }
@@ -66,7 +66,7 @@ export default function Inventory() {
       }
       let num = parseFloat(formattedCil.replace(',', '.')) || 0;
       num = Math.abs(num); // cylindrical magnitude is positive in input but visualized as negative
-      if (num > 2.0) num = 2.0;
+      if (num > 4.0) num = 4.0;
       num = Math.round(num * 4) / 4;
       formattedCil = num.toFixed(2).replace('.', ',');
     }
@@ -118,17 +118,17 @@ export default function Inventory() {
     let newVal = direction === 'up' ? val + step : val - step;
 
     if (field === 'esf') {
-      // Limite ESF: +2.00 a -2.00
-      if (newVal > 2) newVal = 2;
-      if (newVal < -2) newVal = -2;
+      // Limite ESF: +6.00 a -6.00
+      if (newVal > 6) newVal = 6;
+      if (newVal < -6) newVal = -6;
 
       if (newVal < 0) setEsfSign('-');
       else setEsfSign('+');
       setRefSearch(prev => ({ ...prev, esf: Math.abs(newVal).toFixed(2).replace('.', ',') }));
     } else {
-      // Limite CIL: 0.00 a -2.00
+      // Limite CIL: 0.00 a -4.00
       if (newVal > 0) newVal = 0;
-      if (newVal < -2) newVal = -2;
+      if (newVal < -4) newVal = -4;
 
       setRefSearch(prev => ({ ...prev, cil: Math.abs(newVal).toFixed(2).replace('.', ',') }));
     }
@@ -173,7 +173,7 @@ export default function Inventory() {
       setEsfSign('-');
       num = Math.abs(num);
     }
-    if (num > 2.0) num = 2.0;
+    if (num > 6.0) num = 6.0;
     
     num = Math.round(num * 4) / 4;
     setRefSearch(prev => ({ ...prev, esf: num.toFixed(2).replace('.', ',') }));
@@ -194,16 +194,33 @@ export default function Inventory() {
     
     let num = parseFloat(cilVal.replace(',', '.')) || 0;
     
-    if (num > 2.0) num = 2.0;
+    if (num > 4.0) num = 4.0;
     if (num < 0) num = 0;
     
     num = Math.round(num * 4) / 4;
     setRefSearch(prev => ({ ...prev, cil: num.toFixed(2).replace('.', ',') }));
   };
 
-  // Dioptre Scales for Grid
-  const esfScale = Array.from({ length: 17 }, (_, i) => (2 - i * 0.25).toFixed(2));
-  const cilScale = Array.from({ length: 9 }, (_, i) => (-i * 0.25).toFixed(2));
+  const [gridEsfRange, setGridEsfRange] = useState<'standard' | 'positive' | 'negative'>('standard');
+  const [gridCilRange, setGridCilRange] = useState<'standard' | 'extended'>('standard');
+
+  // Dioptre Scales for Grid based on toggled range
+  const esfScale = React.useMemo(() => {
+    if (gridEsfRange === 'positive') {
+      return Array.from({ length: 25 }, (_, i) => (6 - i * 0.25).toFixed(2)); // +6.00 down to 0.00
+    }
+    if (gridEsfRange === 'negative') {
+      return Array.from({ length: 25 }, (_, i) => (-i * 0.25).toFixed(2)); // 0.00 down to -6.00
+    }
+    return Array.from({ length: 17 }, (_, i) => (2 - i * 0.25).toFixed(2)); // +2.00 down to -2.00
+  }, [gridEsfRange]);
+
+  const cilScale = React.useMemo(() => {
+    if (gridCilRange === 'extended') {
+      return Array.from({ length: 17 }, (_, i) => (-i * 0.25).toFixed(2)); // 0.00 to -4.00
+    }
+    return Array.from({ length: 9 }, (_, i) => (-i * 0.25).toFixed(2)); // 0.00 to -2.00
+  }, [gridCilRange]);
 
   // Modal states
   const [showModal, setShowModal] = useState<'entry' | 'exit' | null>(null);
@@ -265,11 +282,41 @@ export default function Inventory() {
     setMovementLoading(true);
     const amount = parseInt(qty);
     const finalQty = showModal === 'entry' ? amount : -amount;
-    const path = `inventory/${selectedItem.id}`;
 
     try {
+      let finalSkuId = selectedItem.sku_id;
+      let finalItemId = selectedItem.id;
+
+      // Se o item for virtual e o SKU ID também for virtual, criamos o SKU na hora!
+      if (selectedItem.isVirtual && selectedItem.sku_id.startsWith('virtual_sku_')) {
+        const family = selectedItem.sku?.family;
+        if (!family) throw new Error("Família de lentes não encontrada para o item virtual.");
+        
+        const esf = selectedItem.sku.spherical;
+        const cil = selectedItem.sku.cylindrical;
+        
+        const skuCode = generateSkuCode(family.line, esf, cil);
+        const skuId = `${family.id}_${skuCode.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        
+        // Criar o documento do SKU primeiro
+        const skuRef = doc(db, 'lensSkus', skuId);
+        await setDoc(skuRef, {
+          family_id: family.id,
+          sku_code: skuCode,
+          spherical: esf,
+          cylindrical: cil,
+          created_at: new Date().toISOString()
+        }, { merge: true });
+
+        finalSkuId = skuId;
+        finalItemId = `${selectedItem.branch_id}_${skuId}`;
+        
+        // Atualizar lista local de SKUs em background
+        fetchAllSkus();
+      }
+
       await runTransaction(db, async (transaction) => {
-        const invRef = doc(db, 'inventory', selectedItem.id);
+        const invRef = doc(db, 'inventory', finalItemId);
         const invDoc = await transaction.get(invRef);
         
         let currentQty = 0;
@@ -283,7 +330,7 @@ export default function Inventory() {
         // Update inventory (creates document if doesn't exist yet via set with merge)
         transaction.set(invRef, {
           branch_id: selectedItem.branch_id,
-          sku_id: selectedItem.sku_id,
+          sku_id: finalSkuId,
           quantity: newQty,
           updated_at: serverTimestamp()
         }, { merge: true });
@@ -292,7 +339,7 @@ export default function Inventory() {
         const movRef = doc(collection(db, 'movements'));
         transaction.set(movRef, {
           branch_id: selectedItem.branch_id,
-          sku_id: selectedItem.sku_id,
+          sku_id: finalSkuId,
           type: showModal === 'entry' ? 'entry' : 'exit',
           quantity: amount,
           reason: reason || (showModal === 'entry' ? 'Entrada manual' : 'Saída manual'),
@@ -474,16 +521,25 @@ export default function Inventory() {
         return existing;
       }
 
-      // If no existing mapping, generate a virtual placeholder
+      // If no existing mapping, try to look up a real SKU first
+      const realSku = allSkus.find(s => 
+        s.family_id === f.id &&
+        Math.abs((s.spherical || 0) - esfSearch) < 0.01 &&
+        Math.abs((s.cylindrical || 0) - cilSearch) < 0.01
+      );
+
       const branchId = selectedBranch || profile?.branch_id || 'global';
-      const skuCode = generateSkuCode(f.line, esfSearch, cilSearch);
+      const actualSkuId = realSku ? realSku.id : `virtual_sku_${f.id}`;
+      const actualItemId = realSku ? `${branchId}_${realSku.id}` : `virtual_${f.id}_${esfSearch}_${cilSearch}`;
+      const skuCode = realSku ? realSku.sku_code : generateSkuCode(f.line, esfSearch, cilSearch);
+
       return {
-        id: `virtual_${f.id}_${esfSearch}_${cilSearch}`,
+        id: actualItemId,
         branch_id: branchId,
-        sku_id: `virtual_sku_${f.id}`,
+        sku_id: actualSkuId,
         quantity: 0,
         sku: {
-          id: `virtual_sku_${f.id}`,
+          id: actualSkuId,
           family_id: f.id,
           sku_code: skuCode,
           spherical: esfSearch,
@@ -494,7 +550,7 @@ export default function Inventory() {
         updated_at: new Date().toISOString()
       };
     });
-  }, [filteredItems, families, appliedRefSearch, selectedFamily, searchQuery, selectedBranch, profile]);
+  }, [filteredItems, families, appliedRefSearch, selectedFamily, searchQuery, selectedBranch, profile, allSkus]);
 
   const isAdmin = profile?.role === 'admin';
 
@@ -839,9 +895,76 @@ export default function Inventory() {
         </div>
       ) : (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          {/* Grid Selection Toggles */}
+          <div className="bg-slate-50 border-b border-slate-100 p-4 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+            {/* Esférico Grid Selector */}
+            <div className="flex flex-col gap-1.5 w-full sm:w-auto">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Faixa do Esférico (ESF)</span>
+              <div className="flex bg-slate-200/60 p-1 rounded-xl items-center w-full sm:w-auto">
+                <button
+                  onClick={() => setGridEsfRange('standard')}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap flex-1 sm:flex-none",
+                    gridEsfRange === 'standard' ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                  )}
+                >
+                  Padrão (+2 a -2)
+                </button>
+                <button
+                  onClick={() => setGridEsfRange('positive')}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap flex-1 sm:flex-none",
+                    gridEsfRange === 'positive' ? "bg-emerald-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"
+                  )}
+                >
+                  Positivo (+6 a 0)
+                </button>
+                <button
+                  onClick={() => setGridEsfRange('negative')}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap flex-1 sm:flex-none",
+                    gridEsfRange === 'negative' ? "bg-rose-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"
+                  )}
+                >
+                  Negativo (0 a -6)
+                </button>
+              </div>
+            </div>
+
+            {/* Cilíndrico Grid Selector */}
+            <div className="flex flex-col gap-1.5 w-full sm:w-auto">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Faixa do Cilíndrico (CIL)</span>
+              <div className="flex bg-slate-200/60 p-1 rounded-xl items-center w-full sm:w-auto">
+                <button
+                  onClick={() => setGridCilRange('standard')}
+                  className={cn(
+                    "px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap flex-1 sm:flex-none",
+                    gridCilRange === 'standard' ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                  )}
+                >
+                  Padrão (0 a -2)
+                </button>
+                <button
+                  onClick={() => setGridCilRange('extended')}
+                  className={cn(
+                    "px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap flex-1 sm:flex-none",
+                    gridCilRange === 'extended' ? "bg-rose-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"
+                  )}
+                >
+                  Estendido (0 a -4)
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div className="overflow-x-auto p-6">
             <div className="min-w-fit">
-              <div className="grid grid-cols-[80px_repeat(9,minmax(60px,1fr))] gap-px bg-slate-100 border border-slate-100 rounded-lg overflow-hidden">
+              <div 
+                className="grid gap-px bg-slate-100 border border-slate-100 rounded-lg overflow-hidden"
+                style={{
+                  gridTemplateColumns: `80px repeat(${cilScale.length}, minmax(60px, 1fr))`
+                }}
+              >
                 {/* Header Row */}
                 <div className="bg-slate-50 p-3 text-[10px] font-bold text-slate-400 uppercase text-center flex items-center justify-center">
                   ESF \ CIL
