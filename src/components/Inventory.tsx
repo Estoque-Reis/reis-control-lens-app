@@ -294,46 +294,137 @@ export default function Inventory() {
   const [newQty, setNewQty] = useState('0');
   const [allSkus, setAllSkus] = useState<any[]>([]);
 
+  // Form states for manual dioptria addition under "Nova Entrada" button
+  const [newEntryMode, setNewEntryMode] = useState<'family_dioptre' | 'sku'>('family_dioptre');
+  const [newFamilyId, setNewFamilyId] = useState('');
+  const [newEsf, setNewEsf] = useState('');
+  const [newCil, setNewCil] = useState('');
+
   const fetchAllSkus = async () => {
     const skus = await getCachedSkus();
     setAllSkus(skus);
   };
 
   const handleCreateInventory = async () => {
-    if (!newSkuId || !newBranchId) return;
+    if (!newBranchId) {
+      alert("Por favor, selecione a filial.");
+      return;
+    }
+
+    const qtyAmount = parseInt(newQty);
+    if (isNaN(qtyAmount) || qtyAmount < 0) {
+      alert("Por favor, insira uma quantidade válida.");
+      return;
+    }
+
+    let finalSkuId = '';
     setMovementLoading(true);
     try {
-      // Validar limites das dioptrias do SKU contra configurações globais
-      const selectedSku = allSkus.find(s => s.id === newSkuId);
-      if (selectedSku) {
-        const esf = selectedSku.spherical !== undefined ? parseFloat(String(selectedSku.spherical)) : 0;
-        const cil = selectedSku.cylindrical !== undefined ? parseFloat(String(selectedSku.cylindrical)) : 0;
+      if (newEntryMode === 'sku') {
+        if (!newSkuId) {
+          alert("Por favor, selecione o SKU.");
+          setMovementLoading(false);
+          return;
+        }
+        
+        // Validar limites das dioptrias do SKU contra configurações globais
+        const selectedSku = allSkus.find(s => s.id === newSkuId);
+        if (selectedSku) {
+          const esf = selectedSku.spherical !== undefined ? parseFloat(String(selectedSku.spherical)) : 0;
+          const cil = selectedSku.cylindrical !== undefined ? parseFloat(String(selectedSku.cylindrical)) : 0;
+
+          if (esf < gridConfig.esf_min || esf > gridConfig.esf_max) {
+            alert(`Erro: A dioptria esférica (ESF: ${esf >= 0 ? '+' : ''}${esf.toFixed(2)}) do SKU está fora dos limites configurados (${gridConfig.esf_min >= 0 ? '+' : ''}${gridConfig.esf_min.toFixed(2)} a ${gridConfig.esf_max >= 0 ? '+' : ''}${gridConfig.esf_max.toFixed(2)}).`);
+            setMovementLoading(false);
+            return;
+          }
+
+          if (cil < gridConfig.cil_min || cil > gridConfig.cil_max) {
+            alert(`Erro: A dioptria cilíndrica (CIL: ${cil >= 0 ? '+' : ''}${cil.toFixed(2)}) do SKU está fora dos limites configurados (${gridConfig.cil_min >= 0 ? '+' : ''}${gridConfig.cil_min.toFixed(2)} a ${gridConfig.cil_max >= 0 ? '+' : ''}${gridConfig.cil_max.toFixed(2)}).`);
+            setMovementLoading(false);
+            return;
+          }
+        }
+        finalSkuId = newSkuId;
+      } else {
+        if (!newFamilyId || newEsf === '' || newCil === '') {
+          alert("Por favor, selecione a família de lentes e as dioptrias (ESF e CIL).");
+          setMovementLoading(false);
+          return;
+        }
+
+        const esf = parseFloat(newEsf);
+        const cil = parseFloat(newCil);
 
         if (esf < gridConfig.esf_min || esf > gridConfig.esf_max) {
-          alert(`Erro: A dioptria esférica (ESF: ${esf >= 0 ? '+' : ''}${esf.toFixed(2)}) do SKU está fora dos limites configurados (${gridConfig.esf_min >= 0 ? '+' : ''}${gridConfig.esf_min.toFixed(2)} a ${gridConfig.esf_max >= 0 ? '+' : ''}${gridConfig.esf_max.toFixed(2)}).`);
+          alert(`Erro: A dioptria esférica (ESF: ${esf >= 0 ? '+' : ''}${esf.toFixed(2)}) está fora dos limites configurados (${gridConfig.esf_min >= 0 ? '+' : ''}${gridConfig.esf_min.toFixed(2)} a ${gridConfig.esf_max >= 0 ? '+' : ''}${gridConfig.esf_max.toFixed(2)}).`);
           setMovementLoading(false);
           return;
         }
 
         if (cil < gridConfig.cil_min || cil > gridConfig.cil_max) {
-          alert(`Erro: A dioptria cilíndrica (CIL: ${cil >= 0 ? '+' : ''}${cil.toFixed(2)}) do SKU está fora dos limites configurados (${gridConfig.cil_min >= 0 ? '+' : ''}${gridConfig.cil_min.toFixed(2)} a ${gridConfig.cil_max >= 0 ? '+' : ''}${gridConfig.cil_max.toFixed(2)}).`);
+          alert(`Erro: A dioptria cilíndrica (CIL: ${cil >= 0 ? '+' : ''}${cil.toFixed(2)}) está fora dos limites configurados (${gridConfig.cil_min >= 0 ? '+' : ''}${gridConfig.cil_min.toFixed(2)} a ${gridConfig.cil_max >= 0 ? '+' : ''}${gridConfig.cil_max.toFixed(2)}).`);
           setMovementLoading(false);
           return;
         }
+
+        const family = families.find(f => f.id === newFamilyId);
+        if (!family) throw new Error("Família de lentes não encontrada.");
+
+        const skuCode = generateSkuCode(family.line, esf, cil);
+        const skuId = `${family.id}_${skuCode.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+        // Create the document of SKU if it doesn't exist
+        const skuRef = doc(db, 'lensSkus', skuId);
+        await setDoc(skuRef, {
+          family_id: family.id,
+          sku_code: skuCode,
+          spherical: esf,
+          cylindrical: cil,
+          created_at: new Date().toISOString()
+        }, { merge: true });
+
+        finalSkuId = skuId;
       }
 
-      const invId = `${newBranchId}_${newSkuId}`;
+      const invId = `${newBranchId}_${finalSkuId}`;
       const invRef = doc(db, 'inventory', invId);
       
-      await setDoc(invRef, {
-        branch_id: newBranchId,
-        sku_id: newSkuId,
-        quantity: parseInt(newQty),
-        updated_at: serverTimestamp()
+      // Use transaction to load current quantity and add it
+      await runTransaction(db, async (transaction) => {
+        const invDoc = await transaction.get(invRef);
+        let currentQty = 0;
+        if (invDoc.exists()) {
+          currentQty = invDoc.data().quantity || 0;
+        }
+        transaction.set(invRef, {
+          branch_id: newBranchId,
+          sku_id: finalSkuId,
+          quantity: currentQty + qtyAmount,
+          updated_at: serverTimestamp()
+        }, { merge: true });
+
+        // Create movement log
+        const movRef = doc(collection(db, 'movements'));
+        transaction.set(movRef, {
+          branch_id: newBranchId,
+          sku_id: finalSkuId,
+          type: 'entry',
+          quantity: qtyAmount,
+          reason: 'Nova entrada de lentes',
+          user_id: auth.currentUser?.uid,
+          created_at: serverTimestamp()
+        });
       });
 
       alert('Item adicionado ao estoque!');
       setShowNewSkuModal(false);
+      // Reset state
+      setNewFamilyId('');
+      setNewEsf('');
+      setNewCil('');
+      setNewQty('0');
+      fetchAllSkus();
       fetchData();
     } catch (err) {
       console.error(err);
@@ -1146,12 +1237,36 @@ export default function Inventory() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl"
+              className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto"
             >
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-bold text-slate-800">Adicionar Lente ao Estoque</h3>
                 <button onClick={() => setShowNewSkuModal(false)} className="p-2 hover:bg-slate-100 rounded-full text-slate-400">
                   <X size={20} />
+                </button>
+              </div>
+
+              {/* Tab Selector */}
+              <div className="flex bg-slate-100 p-1 rounded-xl mb-5">
+                <button
+                  type="button"
+                  onClick={() => setNewEntryMode('family_dioptre')}
+                  className={cn(
+                    "flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer",
+                    newEntryMode === 'family_dioptre' ? "bg-white text-brand-teal shadow-xs border border-slate-100" : "text-slate-500 hover:text-slate-800"
+                  )}
+                >
+                  Definir Dioptria
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewEntryMode('sku')}
+                  className={cn(
+                    "flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer",
+                    newEntryMode === 'sku' ? "bg-white text-brand-teal shadow-xs border border-slate-100" : "text-slate-500 hover:text-slate-800"
+                  )}
+                >
+                  Selecionar por SKU
                 </button>
               </div>
 
@@ -1161,24 +1276,74 @@ export default function Inventory() {
                   <select 
                     value={newBranchId}
                     onChange={(e) => setNewBranchId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-slate-700"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal transition-all text-sm font-medium"
                   >
                     <option value="">Selecione a Filial</option>
                     {branches.map(b => <option key={b.id} value={b.id}>{b.name} ({b.code})</option>)}
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">SKU da Lente</label>
-                  <select 
-                    value={newSkuId}
-                    onChange={(e) => setNewSkuId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-slate-700"
-                  >
-                    <option value="">Selecione o SKU</option>
-                    {allSkus.map(s => <option key={s.id} value={s.id}>{s.sku_code}</option>)}
-                  </select>
-                </div>
+                {newEntryMode === 'sku' ? (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">SKU da Lente</label>
+                    <select 
+                      value={newSkuId}
+                      onChange={(e) => setNewSkuId(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal transition-all text-sm font-semibold"
+                    >
+                      <option value="">Selecione o SKU</option>
+                      {allSkus.map(s => <option key={s.id} value={s.id}>{s.sku_code}</option>)}
+                    </select>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Família de Lentes</label>
+                      <select 
+                        value={newFamilyId}
+                        onChange={(e) => setNewFamilyId(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal transition-all text-sm font-medium"
+                      >
+                        <option value="">Selecione a Família</option>
+                        {families.map(f => <option key={f.id} value={f.id}>{f.manufacturer} - {f.line}</option>)}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Esférico (ESF)</label>
+                        <select 
+                          value={newEsf}
+                          onChange={(e) => setNewEsf(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-slate-750 focus:outline-none focus:ring-2 focus:ring-brand-teal transition-all text-sm font-black"
+                        >
+                          <option value="">Selecione ESF</option>
+                          {esfScale.map(esf => (
+                            <option key={esf} value={parseFloat(esf)}>
+                              {formatRefraction(parseFloat(esf))}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Cilíndrico (CIL)</label>
+                        <select 
+                          value={newCil}
+                          onChange={(e) => setNewCil(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-slate-755 focus:outline-none focus:ring-2 focus:ring-brand-teal transition-all text-sm font-black"
+                        >
+                          <option value="">Selecione CIL</option>
+                          {cilScale.map(cil => (
+                            <option key={cil} value={parseFloat(cil)}>
+                              {formatCylinder(parseFloat(cil))}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Quantidade Inicial</label>
@@ -1186,22 +1351,25 @@ export default function Inventory() {
                     type="number"
                     value={newQty}
                     onChange={(e) => setNewQty(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-slate-700"
+                    className="w-full bg-slate-50 border border-slate-250 rounded-xl px-4 py-3 text-slate-750 font-bold focus:outline-none focus:ring-2 focus:ring-brand-teal"
+                    min="0"
                   />
                 </div>
               </div>
 
               <div className="mt-8 flex space-x-3">
                 <button 
+                  type="button"
                   onClick={() => setShowNewSkuModal(false)}
-                  className="flex-1 px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm"
+                  className="flex-1 px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button 
+                  type="button"
                   onClick={handleCreateInventory}
                   disabled={movementLoading}
-                  className="flex-1 px-6 py-3 bg-brand-teal text-white rounded-xl font-bold text-sm shadow-lg shadow-teal-900/10 disabled:opacity-50"
+                  className="flex-1 px-6 py-3 bg-brand-teal text-white rounded-xl font-bold text-sm shadow-lg shadow-teal-900/10 disabled:opacity-50 hover:bg-teal-700 transition-all cursor-pointer"
                 >
                   {movementLoading ? 'Salvando...' : 'Adicionar ao Estoque'}
                 </button>
