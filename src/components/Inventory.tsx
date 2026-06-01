@@ -201,26 +201,14 @@ export default function Inventory() {
     setRefSearch(prev => ({ ...prev, cil: num.toFixed(2).replace('.', ',') }));
   };
 
-  const [gridEsfRange, setGridEsfRange] = useState<'standard' | 'positive' | 'negative'>('standard');
-  const [gridCilRange, setGridCilRange] = useState<'standard' | 'extended'>('standard');
-
-  // Dioptre Scales for Grid based on toggled range
+  // Dioptre Scales for Grid based on standard request (ESF: +2.00 to -2.00, CIL: 0.00 to -2.00)
   const esfScale = React.useMemo(() => {
-    if (gridEsfRange === 'positive') {
-      return Array.from({ length: 25 }, (_, i) => (6 - i * 0.25).toFixed(2)); // +6.00 down to 0.00
-    }
-    if (gridEsfRange === 'negative') {
-      return Array.from({ length: 25 }, (_, i) => (-i * 0.25).toFixed(2)); // 0.00 down to -6.00
-    }
-    return Array.from({ length: 17 }, (_, i) => (2 - i * 0.25).toFixed(2)); // +2.00 down to -2.00
-  }, [gridEsfRange]);
+    return Array.from({ length: 17 }, (_, i) => (2 - i * 0.25).toFixed(2)); // +2.00 to -2.00 (steps of 0.25)
+  }, []);
 
   const cilScale = React.useMemo(() => {
-    if (gridCilRange === 'extended') {
-      return Array.from({ length: 17 }, (_, i) => (-i * 0.25).toFixed(2)); // 0.00 to -4.00
-    }
-    return Array.from({ length: 9 }, (_, i) => (-i * 0.25).toFixed(2)); // 0.00 to -2.00
-  }, [gridCilRange]);
+    return Array.from({ length: 9 }, (_, i) => (-i * 0.25).toFixed(2)); // 0.00 to -2.00 (steps of 0.25)
+  }, []);
 
   // Modal states
   const [showModal, setShowModal] = useState<'entry' | 'exit' | null>(null);
@@ -895,68 +883,6 @@ export default function Inventory() {
         </div>
       ) : (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          {/* Grid Selection Toggles */}
-          <div className="bg-slate-50 border-b border-slate-100 p-4 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-            {/* Esférico Grid Selector */}
-            <div className="flex flex-col gap-1.5 w-full sm:w-auto">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Faixa do Esférico (ESF)</span>
-              <div className="flex bg-slate-200/60 p-1 rounded-xl items-center w-full sm:w-auto">
-                <button
-                  onClick={() => setGridEsfRange('standard')}
-                  className={cn(
-                    "px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap flex-1 sm:flex-none",
-                    gridEsfRange === 'standard' ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                  )}
-                >
-                  Padrão (+2 a -2)
-                </button>
-                <button
-                  onClick={() => setGridEsfRange('positive')}
-                  className={cn(
-                    "px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap flex-1 sm:flex-none",
-                    gridEsfRange === 'positive' ? "bg-emerald-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"
-                  )}
-                >
-                  Positivo (+6 a 0)
-                </button>
-                <button
-                  onClick={() => setGridEsfRange('negative')}
-                  className={cn(
-                    "px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap flex-1 sm:flex-none",
-                    gridEsfRange === 'negative' ? "bg-rose-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"
-                  )}
-                >
-                  Negativo (0 a -6)
-                </button>
-              </div>
-            </div>
-
-            {/* Cilíndrico Grid Selector */}
-            <div className="flex flex-col gap-1.5 w-full sm:w-auto">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Faixa do Cilíndrico (CIL)</span>
-              <div className="flex bg-slate-200/60 p-1 rounded-xl items-center w-full sm:w-auto">
-                <button
-                  onClick={() => setGridCilRange('standard')}
-                  className={cn(
-                    "px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap flex-1 sm:flex-none",
-                    gridCilRange === 'standard' ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                  )}
-                >
-                  Padrão (0 a -2)
-                </button>
-                <button
-                  onClick={() => setGridCilRange('extended')}
-                  className={cn(
-                    "px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap flex-1 sm:flex-none",
-                    gridCilRange === 'extended' ? "bg-rose-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"
-                  )}
-                >
-                  Estendido (0 a -4)
-                </button>
-              </div>
-            </div>
-          </div>
-
           <div className="overflow-x-auto p-6">
             <div className="min-w-fit">
               <div 
@@ -989,11 +915,44 @@ export default function Inventory() {
                       const totalQty = matchingItems.reduce((acc, i) => acc + i.quantity, 0);
                       const minStock = matchingItems[0]?.sku?.family?.min_stock_per_sku || 0;
 
+                      // Resolve target item for stock Entry/Exit (either matching or virtual)
+                      const f = selectedFamily ? families.find(fam => fam.id === selectedFamily) : null;
+                      let targetItem = matchingItems[0];
+                      if (!targetItem && f) {
+                        const numericEsf = parseFloat(esf);
+                        const numericCil = parseFloat(cil);
+                        const realSku = allSkus.find(s => 
+                          s.family_id === f.id &&
+                          Math.abs((s.spherical || 0) - numericEsf) < 0.01 &&
+                          Math.abs((s.cylindrical || 0) - numericCil) < 0.01
+                        );
+                        const branchId = selectedBranch || profile?.branch_id || 'global';
+                        const actualSkuId = realSku ? realSku.id : `virtual_sku_${f.id}`;
+                        const actualItemId = realSku ? `${branchId}_${realSku.id}` : `virtual_${f.id}_${numericEsf}_${numericCil}`;
+                        const skuCode = realSku ? realSku.sku_code : generateSkuCode(f.line, numericEsf, numericCil);
+                        targetItem = {
+                          id: actualItemId,
+                          branch_id: branchId,
+                          sku_id: actualSkuId,
+                          quantity: 0,
+                          isVirtual: true,
+                          sku: {
+                            id: actualSkuId,
+                            family_id: f.id,
+                            sku_code: skuCode,
+                            spherical: numericEsf,
+                            cylindrical: numericCil,
+                            family: f
+                          },
+                          updated_at: new Date().toISOString()
+                        };
+                      }
+
                       return (
                         <div 
                           key={`${esf}_${cil}`} 
                           className={cn(
-                            "bg-white p-3 text-sm font-bold text-center relative transition-colors group cursor-pointer hover:bg-slate-50",
+                            "bg-white p-3 pb-8 text-sm font-bold text-center relative transition-colors group cursor-pointer hover:bg-slate-50 min-h-[64px] flex flex-col justify-start items-center",
                             totalQty === 0 ? "text-slate-200" : (totalQty <= minStock ? "text-red-500" : "text-brand-teal")
                           )}
                           onClick={() => {
@@ -1015,14 +974,41 @@ export default function Inventory() {
                             setViewMode('list');
                           }}
                         >
-                          {totalQty > 0 ? totalQty : '—'}
+                          <span className="mt-0.5">{totalQty > 0 ? totalQty : '—'}</span>
                           {matchingItems.length > 1 && (
                             <span className="absolute top-1 right-1 text-[8px] bg-slate-100 text-slate-400 px-1 rounded-full">
                               +{matchingItems.length - 1}
                             </span>
                           )}
-                          {isAdmin && (
-                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 flex items-center justify-center bg-brand-teal/5 pointer-events-none"></div>
+                          {isAdmin && targetItem && (
+                            <div className="absolute inset-x-0 bottom-1 flex justify-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 py-0.5 z-10 px-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedItem(targetItem);
+                                  setQty('1');
+                                  setReason('');
+                                  setShowModal('entry');
+                                }}
+                                className="p-0.5 px-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded bg-emerald-50/70 border border-emerald-100/50 transition-colors flex items-center justify-center text-[10px] font-bold"
+                                title="Entrada"
+                              >
+                                <Plus size={10} className="mr-0.5" /> +
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedItem(targetItem);
+                                  setQty('1');
+                                  setReason('');
+                                  setShowModal('exit');
+                                }}
+                                className="p-0.5 px-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded bg-red-50/70 border border-red-100/50 transition-colors flex items-center justify-center text-[10px] font-bold"
+                                title="Saída"
+                              >
+                                <Minus size={10} className="mr-0.5" /> -
+                              </button>
+                            </div>
                           )}
                         </div>
                       );

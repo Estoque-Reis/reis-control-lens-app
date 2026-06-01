@@ -231,7 +231,7 @@ export default function LensFamilies() {
     setConfirmModal({
       isOpen: true,
       title: 'Gerar Grade Automática',
-      message: `Deseja gerar a grade automática para a família ${family.line}? Isso criará os SKUs com ESF de -6.00 a +6.00 e CIL de 0.00 a -4.00 para todas as filiais.`,
+      message: `Deseja gerar a grade automática para a família ${family.line}? Isso criará os SKUs com ESF de -2.00 a +2.00 e CIL de 0.00 a -2.00 para todas as filiais.`,
       onConfirm: async () => {
         setConfirmModal(null);
         setGeneratingGridId(family.id);
@@ -245,11 +245,11 @@ export default function LensFamilies() {
           let totalSkus = 0;
           let totalInv = 0;
           
-          // ESF -6.00 to +6.00 incrementing by 0.25 (using integer values to avoid float precision bugs)
-          for (let esfVal = -600; esfVal <= 600; esfVal += 25) {
+          // ESF -2.00 to +2.00 incrementing by 0.25 (using integer values to avoid float precision bugs)
+          for (let esfVal = -200; esfVal <= 200; esfVal += 25) {
             const esf = esfVal / 100;
-            // CIL 0.00 to -4.00 decrementing by 0.25
-            for (let cilVal = 0; cilVal >= -400; cilVal -= 25) {
+            // CIL 0.00 to -2.00 decrementing by 0.25
+            for (let cilVal = 0; cilVal >= -200; cilVal -= 25) {
               const cil = cilVal / 100;
               const skuCode = generateSkuCode(family.line, esf, cil);
               const skuId = `${family.id}_${skuCode.replace(/[^a-zA-Z0-9]/g, '_')}`;
