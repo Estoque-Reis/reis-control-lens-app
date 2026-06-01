@@ -4,6 +4,7 @@ import {
   Filter, 
   Plus, 
   Minus,
+  MinusCircle,
   X,
   ArrowRightLeft, 
   ArrowUpCircle, 
@@ -282,16 +283,18 @@ export default function Inventory() {
   }, [gridConfig.cil_min, gridConfig.cil_max, gridConfig.cil_step]);
 
   // Modal states
-  const [showModal, setShowModal] = useState<'entry' | 'exit' | null>(null);
+  const [showModal, setShowModal] = useState<'entry' | 'exit' | 'writeoff' | null>(null);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [qty, setQty] = useState('1');
   const [reason, setReason] = useState('');
   const [movementLoading, setMovementLoading] = useState(false);
 
   const [showNewSkuModal, setShowNewSkuModal] = useState(false);
+  const [newSkuModalMode, setNewSkuModalMode] = useState<'entry' | 'writeoff'>('entry');
   const [newSkuId, setNewSkuId] = useState('');
   const [newBranchId, setNewBranchId] = useState('');
   const [newQty, setNewQty] = useState('0');
+  const [newReason, setNewReason] = useState('');
   const [allSkus, setAllSkus] = useState<any[]>([]);
 
   // Form states for manual dioptria addition under "Nova Entrada" button
@@ -390,17 +393,25 @@ export default function Inventory() {
       const invId = `${newBranchId}_${finalSkuId}`;
       const invRef = doc(db, 'inventory', invId);
       
-      // Use transaction to load current quantity and add it
+      // Use transaction to load current quantity and add/subtract it
       await runTransaction(db, async (transaction) => {
         const invDoc = await transaction.get(invRef);
         let currentQty = 0;
         if (invDoc.exists()) {
           currentQty = invDoc.data().quantity || 0;
         }
+
+        const qtyChange = newSkuModalMode === 'entry' ? qtyAmount : -qtyAmount;
+        const nextQty = currentQty + qtyChange;
+
+        if (nextQty < 0) {
+          throw new Error("Estoque insuficiente para realizar a baixa desejada!");
+        }
+
         transaction.set(invRef, {
           branch_id: newBranchId,
           sku_id: finalSkuId,
-          quantity: currentQty + qtyAmount,
+          quantity: nextQty,
           updated_at: serverTimestamp()
         }, { merge: true });
 
@@ -409,26 +420,31 @@ export default function Inventory() {
         transaction.set(movRef, {
           branch_id: newBranchId,
           sku_id: finalSkuId,
-          type: 'entry',
+          type: newSkuModalMode === 'entry' ? 'entry' : 'writeoff',
           quantity: qtyAmount,
-          reason: 'Nova entrada de lentes',
+          reason: newReason || (newSkuModalMode === 'entry' ? 'Nova entrada de lentes' : 'Baixa de estoque (ajuste)'),
           user_id: auth.currentUser?.uid,
           created_at: serverTimestamp()
         });
       });
 
-      alert('Item adicionado ao estoque!');
+      if (newSkuModalMode === 'entry') {
+        alert('Item adicionado ao estoque!');
+      } else {
+        alert('Baixa de estoque realizada com sucesso!');
+      }
       setShowNewSkuModal(false);
       // Reset state
       setNewFamilyId('');
       setNewEsf('');
       setNewCil('');
       setNewQty('0');
+      setNewReason('');
       fetchAllSkus();
       fetchData();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Erro ao adicionar item.');
+      alert(err.message || 'Erro ao processar estoque.');
     } finally {
       setMovementLoading(false);
     }
@@ -523,9 +539,9 @@ export default function Inventory() {
         transaction.set(movRef, {
           branch_id: selectedItem.branch_id,
           sku_id: finalSkuId,
-          type: showModal === 'entry' ? 'entry' : 'exit',
+          type: showModal === 'entry' ? 'entry' : (showModal === 'writeoff' ? 'writeoff' : 'exit'),
           quantity: amount,
-          reason: reason || (showModal === 'entry' ? 'Entrada manual' : 'Saída manual'),
+          reason: reason || (showModal === 'entry' ? 'Entrada manual' : (showModal === 'writeoff' ? 'Baixa de estoque' : 'Saída manual')),
           user_id: auth.currentUser?.uid,
           created_at: serverTimestamp()
         });
@@ -759,13 +775,26 @@ export default function Inventory() {
             <button 
               onClick={() => {
                 fetchAllSkus();
+                setNewSkuModalMode('entry');
+                setNewReason('');
                 setShowNewSkuModal(true);
               }}
-              className="flex items-center px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg text-sm font-semibold hover:bg-emerald-100 transition-colors"
+              className="flex items-center px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg text-sm font-semibold hover:bg-emerald-100 transition-colors cursor-pointer"
             >
               <Plus size={18} className="mr-2" /> Nova Entrada
             </button>
-            <button className="flex items-center px-4 py-2 bg-amber-50 text-amber-600 rounded-lg text-sm font-semibold hover:bg-amber-100 transition-colors">
+            <button 
+              onClick={() => {
+                fetchAllSkus();
+                setNewSkuModalMode('writeoff');
+                setNewReason('');
+                setShowNewSkuModal(true);
+              }}
+              className="flex items-center px-4 py-2 bg-amber-50 text-amber-600 rounded-lg text-sm font-semibold hover:bg-amber-100 transition-colors cursor-pointer"
+            >
+              <MinusCircle size={18} className="mr-2" /> Baixa de Estoque
+            </button>
+            <button className="flex items-center px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition-colors cursor-pointer">
               <ArrowRightLeft size={18} className="mr-2" /> Transferência
             </button>
           </div>
@@ -1059,6 +1088,16 @@ export default function Inventory() {
                               >
                                 <Minus size={16} />
                               </button>
+                              <button 
+                                onClick={() => {
+                                  setSelectedItem(item);
+                                  setShowModal('writeoff');
+                                }}
+                                className="p-2 text-slate-400 hover:text-amber-500 transition-colors rounded-lg bg-slate-100 hover:bg-amber-50" 
+                                title="Baixa de Estoque"
+                              >
+                                <MinusCircle size={16} />
+                              </button>
                             </>
                           )}
                           <button className="p-2 text-slate-400 hover:text-brand-teal transition-colors rounded-lg bg-slate-100 hover:bg-emerald-50" title="Histórico">
@@ -1211,6 +1250,19 @@ export default function Inventory() {
                               >
                                 <Minus size={10} className="mr-0.5" /> -
                               </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedItem(targetItem);
+                                  setQty('1');
+                                  setReason('');
+                                  setShowModal('writeoff');
+                                }}
+                                className="p-0.5 px-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded bg-amber-50/70 border border-amber-100/50 transition-colors flex items-center justify-center text-[10px] font-bold"
+                                title="Baixa"
+                              >
+                                <MinusCircle size={10} className="mr-0.5 text-amber-600" /> B
+                              </button>
                             </div>
                           )}
                         </div>
@@ -1240,7 +1292,9 @@ export default function Inventory() {
               className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto"
             >
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold text-slate-800">Adicionar Lente ao Estoque</h3>
+                <h3 className="text-xl font-bold text-slate-800">
+                  {newSkuModalMode === 'entry' ? 'Adicionar Lente ao Estoque' : 'Baixa de Estoque (Ajuste)'}
+                </h3>
                 <button onClick={() => setShowNewSkuModal(false)} className="p-2 hover:bg-slate-100 rounded-full text-slate-400">
                   <X size={20} />
                 </button>
@@ -1346,7 +1400,9 @@ export default function Inventory() {
                 )}
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Quantidade Inicial</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">
+                    {newSkuModalMode === 'entry' ? 'Quantidade Inicial' : 'Quantidade a Baixar'}
+                  </label>
                   <input 
                     type="number"
                     value={newQty}
@@ -1355,6 +1411,18 @@ export default function Inventory() {
                     min="0"
                   />
                 </div>
+
+                {newSkuModalMode === 'writeoff' && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Motivo da Baixa</label>
+                    <textarea 
+                      value={newReason}
+                      onChange={(e) => setNewReason(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal text-sm font-medium h-20 resize-none"
+                      placeholder="Ex: Quebra, Perda, Ajuste físico de inventário..."
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="mt-8 flex space-x-3">
@@ -1369,9 +1437,14 @@ export default function Inventory() {
                   type="button"
                   onClick={handleCreateInventory}
                   disabled={movementLoading}
-                  className="flex-1 px-6 py-3 bg-brand-teal text-white rounded-xl font-bold text-sm shadow-lg shadow-teal-900/10 disabled:opacity-50 hover:bg-teal-700 transition-all cursor-pointer"
+                  className={cn(
+                    "flex-1 px-6 py-3 text-white rounded-xl font-bold text-sm shadow-lg transition-all cursor-pointer disabled:opacity-50",
+                    newSkuModalMode === 'entry' 
+                      ? "bg-brand-teal hover:bg-teal-700 shadow-teal-900/10" 
+                      : "bg-amber-500 hover:bg-amber-600 shadow-amber-900/10"
+                  )}
                 >
-                  {movementLoading ? 'Salvando...' : 'Adicionar ao Estoque'}
+                  {movementLoading ? 'Salvando...' : (newSkuModalMode === 'entry' ? 'Adicionar ao Estoque' : 'Efetuar Baixa')}
                 </button>
               </div>
             </motion.div>
@@ -1397,7 +1470,7 @@ export default function Inventory() {
             >
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-bold text-slate-800">
-                  {showModal === 'entry' ? 'Registrar Entrada' : 'Registrar Saída'}
+                  {showModal === 'entry' ? 'Registrar Entrada' : (showModal === 'writeoff' ? 'Registrar Baixa de Estoque' : 'Registrar Saída')}
                 </h3>
                 <button onClick={() => setShowModal(null)} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 trasition-colors">
                   <X size={20} />
@@ -1445,7 +1518,11 @@ export default function Inventory() {
                   onClick={handleMovement}
                   disabled={movementLoading}
                   className={`flex-1 px-6 py-3 text-white rounded-xl font-bold text-sm transition-all shadow-lg ${
-                    showModal === 'entry' ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20' : 'bg-red-500 hover:bg-red-600 shadow-red-500/20'
+                    showModal === 'entry' 
+                      ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20' 
+                      : (showModal === 'writeoff'
+                          ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20'
+                          : 'bg-red-500 hover:bg-red-600 shadow-red-500/20')
                   } disabled:opacity-50`}
                 >
                   {movementLoading ? 'Processando...' : 'Confirmar'}

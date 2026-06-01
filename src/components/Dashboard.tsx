@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { 
   TrendingUp, 
   TrendingDown, 
+  MinusCircle,
   Package, 
   AlertTriangle, 
   DollarSign, 
   ArrowLeftRight,
-  ChevronRight
+  ChevronRight,
+  Settings
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -24,7 +26,7 @@ import { motion } from 'motion/react';
 import { useAuth } from '@/src/hooks/useAuth';
 import { formatCurrency, cn } from '@/src/lib/utils';
 import { db } from '@/src/lib/firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc, setDoc } from 'firebase/firestore';
 import { Branch, LensFamily, LensSku, InventoryItem } from '@/src/types';
 
 export default function Dashboard() {
@@ -44,6 +46,11 @@ export default function Dashboard() {
   const [criticalAlerts, setCriticalAlerts] = useState<any[]>([]);
   const [recentMovements, setRecentMovements] = useState<any[]>([]);
   
+  const [warnPercentage, setWarnPercentage] = useState(150);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [attentionAlerts, setAttentionAlerts] = useState<any[]>([]);
+  const [alertTab, setAlertTab] = useState<'critical' | 'attention'>('critical');
+  
   const isAdmin = profile?.role === 'admin';
   const COLORS = ['#0F766E', '#164E63', '#10B981', '#3B82F6', '#F59E0B', '#EF4444'];
 
@@ -57,15 +64,22 @@ export default function Dashboard() {
       const today = new Date();
       const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-      // 1. Fetch all required collections
-      const [branchesSnap, familiesSnap, skusSnap, inventorySnap, transfersSnap, movementsSnap] = await Promise.all([
+      // 1. Fetch all required collections and custom alert percentage config
+      const [branchesSnap, familiesSnap, skusSnap, inventorySnap, transfersSnap, movementsSnap, configSnap] = await Promise.all([
         getDocs(collection(db, 'branches')),
         getDocs(collection(db, 'lensFamilies')),
         getDocs(collection(db, 'lensSkus')),
         getDocs(collection(db, 'inventory')),
         getDocs(query(collection(db, 'transfers'), where('status', '==', 'pending'))),
-        getDocs(query(collection(db, 'movements'))) // Fetching movements for recent stats
+        getDocs(query(collection(db, 'movements'))), // Fetching movements for recent stats
+        getDoc(doc(db, 'configuracoes', 'alerta_estoque'))
       ]);
+
+      let loadedPercentage = 150;
+      if (configSnap.exists()) {
+        loadedPercentage = configSnap.data().percentage || 150;
+      }
+      setWarnPercentage(loadedPercentage);
 
       const branches = branchesSnap.docs.reduce((acc, doc) => ({ ...acc, [doc.id]: doc.data() }), {} as Record<string, any>);
       const families = familiesSnap.docs.reduce((acc, doc) => ({ ...acc, [doc.id]: { id: doc.id, ...doc.data() } }), {} as Record<string, any>);
@@ -82,7 +96,7 @@ export default function Dashboard() {
         });
 
       const recentEntryCount = movements.filter(m => m.type === 'entry').length;
-      const recentExitCount = movements.filter(m => m.type === 'exit').length;
+      const recentExitCount = movements.filter(m => m.type === 'exit' || m.type === 'writeoff').length;
 
       // 3. Current Stock Calculations
       let totalValue = 0;
@@ -90,6 +104,7 @@ export default function Dashboard() {
       const branchTotals: Record<string, number> = {};
       const materialTotals: Record<string, number> = {};
       const alerts: any[] = [];
+      const attentionList: any[] = [];
 
       inventory.forEach(item => {
         const sku = skus[item.sku_id];
@@ -100,17 +115,28 @@ export default function Dashboard() {
           // Total Value
           totalValue += (item.quantity * (family.cost_price || 0));
 
-          // Critical Items
-          if (item.quantity <= (family.min_stock_per_sku || 0)) {
+          const minStock = family.min_stock_per_sku || 0;
+
+          // Critical Items (<= 100% of minimum stock)
+          if (item.quantity <= minStock) {
             criticalCount++;
             if (alerts.length < 5) {
               alerts.push({
                 product: `${family.manufacturer} ${family.line} ${sku.sku_code}`,
                 branch: branch?.name || 'Desconhecida',
                 qty: item.quantity,
-                min: family.min_stock_per_sku
+                min: minStock
               });
             }
+          } else if (minStock > 0 && item.quantity <= minStock * (loadedPercentage / 100)) {
+            // Attention/Warning list (between minimum stock and custom configurable percentage of minimum stock)
+            attentionList.push({
+              product: `${family.manufacturer} ${family.line} ${sku.sku_code}`,
+              branch: branch?.name || 'Desconhecida',
+              qty: item.quantity,
+              min: minStock,
+              percentage: Math.round((item.quantity / minStock) * 100)
+            });
           }
 
           // Branch Stock Totals
@@ -138,6 +164,7 @@ export default function Dashboard() {
       setBranchStockData(formattedBranchData);
       setMaterialData(formattedMaterialData);
       setCriticalAlerts(alerts);
+      setAttentionAlerts(attentionList);
       setRecentMovements(movements.slice(0, 10).map(m => ({
         ...m,
         sku: skus[m.sku_id],
@@ -148,6 +175,27 @@ export default function Dashboard() {
       console.error('Error fetching dashboard data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    if (warnPercentage < 101 || warnPercentage > 500) {
+      alert("Por favor, insira um valor de porcentagem limite entre 101% e 500%.");
+      return;
+    }
+    setConfigSaving(true);
+    try {
+      await setDoc(doc(db, 'configuracoes', 'alerta_estoque'), {
+        percentage: warnPercentage,
+        updated_at: new Date().toISOString()
+      }, { merge: true });
+      alert("Configuração de alerta salva com sucesso!");
+      fetchDashboardData();
+    } catch (err) {
+      console.error("Erro ao salvar configuração:", err);
+      alert("Erro ao salvar a configuração de alerta.");
+    } finally {
+      setConfigSaving(false);
     }
   };
 
@@ -183,6 +231,49 @@ export default function Dashboard() {
           <p className="text-slate-400 mt-1">Dados reais consolidados de toda a sua rede.</p>
         </div>
       </div>
+
+      {/* Configuration Card (Admin only) */}
+      {isAdmin && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-brand-teal/10 rounded-xl text-brand-teal mt-0.5">
+                <Settings size={20} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-800">Definir Limiar de Alerta para Administrador</h3>
+                <p className="text-slate-400 text-xs mt-0.5">
+                  Itens com estoque acima do mínimo porém abaixo deste percentual de limite aparecerão nos alertas de atenção.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <input
+                  type="number"
+                  value={warnPercentage}
+                  onChange={(e) => setWarnPercentage(Number(e.target.value))}
+                  className="w-24 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal text-sm font-semibold text-center pr-7"
+                  min="101"
+                  max="500"
+                />
+                <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-semibold">%</span>
+              </div>
+              <button
+                onClick={handleSaveConfig}
+                disabled={configSaving}
+                className="px-4 py-2 bg-brand-teal text-white text-xs font-bold rounded-xl shadow-lg shadow-teal-900/10 hover:bg-teal-700 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {configSaving ? 'Salvando...' : 'Salvar Limite'}
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-2 grid grid-cols-2 gap-6">
@@ -305,9 +396,9 @@ export default function Dashboard() {
                   <div className="flex items-center space-x-3">
                     <div className={cn(
                       "w-8 h-8 rounded-full flex items-center justify-center text-white",
-                      mov.type === 'entry' ? "bg-emerald-500" : "bg-red-500"
+                      mov.type === 'entry' ? "bg-emerald-500" : (mov.type === 'writeoff' ? "bg-amber-500" : "bg-red-500")
                     )}>
-                      {mov.type === 'entry' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                      {mov.type === 'entry' ? <TrendingUp size={14} /> : (mov.type === 'writeoff' ? <MinusCircle size={14} /> : <TrendingDown size={14} />)}
                     </div>
                     <div>
                       <p className="text-sm font-bold text-slate-800">{mov.sku?.sku_code || 'SKU Desconhecido'}</p>
@@ -319,7 +410,7 @@ export default function Dashboard() {
                   <div className="text-right">
                     <p className={cn(
                       "text-sm font-bold",
-                      mov.type === 'entry' ? "text-emerald-600" : "text-red-600"
+                      mov.type === 'entry' ? "text-emerald-600" : (mov.type === 'writeoff' ? "text-amber-600 font-bold" : "text-red-600")
                     )}>
                       {mov.type === 'entry' ? '+' : '-'}{mov.quantity}
                     </p>
@@ -341,29 +432,76 @@ export default function Dashboard() {
 
         {/* Quick Alerts */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="p-6 border-b border-slate-50 flex justify-between items-center">
+          <div className="p-6 border-b border-slate-50 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
             <h3 className="text-lg font-bold text-slate-800">Alertas de Estoque</h3>
-            <span className="text-xs font-bold text-red-500 uppercase">Crítico</span>
+            <div className="flex bg-slate-100 p-1 rounded-xl">
+              <button
+                onClick={() => setAlertTab('critical')}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer",
+                  alertTab === 'critical' ? "bg-white text-red-500 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                )}
+              >
+                Críticos ({stats.criticalItems})
+              </button>
+              <button
+                onClick={() => setAlertTab('attention')}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer",
+                  alertTab === 'attention' ? "bg-white text-amber-500 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                )}
+              >
+                Atenção ({attentionAlerts.length})
+              </button>
+            </div>
           </div>
           <div className="divide-y divide-slate-50">
-            {criticalAlerts.length === 0 ? (
-              <div className="p-12 text-center text-slate-400">
-                <p>Nenhum alerta crítico.</p>
-              </div>
-            ) : (
-              criticalAlerts.map((alert, idx) => (
-                <div key={idx} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-500">
-                      <AlertTriangle size={16} />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-slate-800">{alert.product}</p>
-                      <p className="text-[10px] text-slate-400">{alert.branch} • Est: <span className="text-red-500">{alert.qty}</span> / Mín: {alert.min}</p>
-                    </div>
-                  </div>
+            {alertTab === 'critical' ? (
+              criticalAlerts.length === 0 ? (
+                <div className="p-12 text-center text-slate-400">
+                  <p>Nenhum alerta crítico.</p>
                 </div>
-              ))
+              ) : (
+                criticalAlerts.map((alert, idx) => (
+                  <div key={idx} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-500">
+                        <AlertTriangle size={16} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-800">{alert.product}</p>
+                        <p className="text-[10px] text-slate-400">
+                          {alert.branch} • Est: <span className="text-red-500 font-bold">{alert.qty}</span> / Mín: {alert.min}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 bg-red-50 text-red-600 rounded-full">Crítico</span>
+                  </div>
+                ))
+              )
+            ) : (
+              attentionAlerts.length === 0 ? (
+                <div className="p-12 text-center text-slate-400">
+                  <p>Nenhum item em estado de atenção.</p>
+                </div>
+              ) : (
+                attentionAlerts.map((alert, idx) => (
+                  <div key={idx} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-500">
+                        <AlertTriangle size={16} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-800">{alert.product}</p>
+                        <p className="text-[10px] text-slate-400">
+                          {alert.branch} • Est: <span className="text-amber-600 font-bold">{alert.qty}</span> / Mín: {alert.min} ({alert.percentage}%)
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-50 text-amber-600 rounded-full">Atenção</span>
+                  </div>
+                ))
+              )
             )}
           </div>
         </div>
