@@ -19,7 +19,7 @@ import {
   X
 } from 'lucide-react';
 import { db, getCachedBranches, getCachedFamilies, getCachedSkus } from '@/src/lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { Branch, LensFamily, LensSku } from '@/src/types';
 import { cn, formatRefraction, formatCylinder, generateSkuCode } from '@/src/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -45,14 +45,40 @@ export default function BranchInventory() {
 
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
-  // Dioptre Scales for Grid based on standard request (ESF: +2.00 to -2.00, CIL: 0.00 to -2.00)
+  // Custom Diopter limits configuration retrieved from Firestore
+  const [gridConfig, setGridConfig] = useState({
+    esf_min: -2.00,
+    esf_max: 2.00,
+    esf_step: 0.25,
+    cil_min: -2.00,
+    cil_max: 0.00,
+    cil_step: 0.25
+  });
+
+  // Dynamic scale generators using settings state (fallback to +2/-2 if invalid)
   const esfScale = React.useMemo(() => {
-    return Array.from({ length: 17 }, (_, i) => (2 - i * 0.25).toFixed(2)); // +2.00 to -2.00 (steps of 0.25)
-  }, []);
+    const min = parseFloat(String(gridConfig.esf_min));
+    const max = parseFloat(String(gridConfig.esf_max));
+    const step = parseFloat(String(gridConfig.esf_step)) || 0.25;
+    if (isNaN(min) || isNaN(max) || min >= max) {
+      return Array.from({ length: 17 }, (_, i) => (2 - i * 0.25).toFixed(2));
+    }
+    const len = Math.round((max - min) / step) + 1;
+    if (len <= 0 || len > 100) return Array.from({ length: 17 }, (_, i) => (2 - i * 0.25).toFixed(2));
+    return Array.from({ length: len }, (_, i) => (max - i * step).toFixed(2));
+  }, [gridConfig.esf_min, gridConfig.esf_max, gridConfig.esf_step]);
 
   const cilScale = React.useMemo(() => {
-    return Array.from({ length: 9 }, (_, i) => (-i * 0.25).toFixed(2)); // 0.00 to -2.00 (steps of 0.25)
-  }, []);
+    const min = parseFloat(String(gridConfig.cil_min));
+    const max = parseFloat(String(gridConfig.cil_max));
+    const step = parseFloat(String(gridConfig.cil_step)) || 0.25;
+    if (isNaN(min) || isNaN(max) || min >= max) {
+      return Array.from({ length: 9 }, (_, i) => (-i * 0.25).toFixed(2));
+    }
+    const len = Math.round((max - min) / step) + 1;
+    if (len <= 0 || len > 100) return Array.from({ length: 9 }, (_, i) => (-i * 0.25).toFixed(2));
+    return Array.from({ length: len }, (_, i) => (max - i * step).toFixed(2));
+  }, [gridConfig.cil_min, gridConfig.cil_max, gridConfig.cil_step]);
 
   // Applied filters for dioptria query
   const [appliedEsfFilter, setAppliedEsfFilter] = useState('');
@@ -70,12 +96,25 @@ export default function BranchInventory() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [branchesData, familiesData, skusData, inventorySnap] = await Promise.all([
+      const [branchesData, familiesData, skusData, inventorySnap, configSnap] = await Promise.all([
         getCachedBranches(),
         getCachedFamilies(),
         getCachedSkus(),
-        getDocs(collection(db, 'inventory'))
+        getDocs(collection(db, 'inventory')),
+        getDoc(doc(db, 'configuracoes', 'grade_limites'))
       ]);
+
+      if (configSnap.exists()) {
+        const data = configSnap.data();
+        setGridConfig({
+          esf_min: typeof data.esf_min === 'number' ? data.esf_min : -2.00,
+          esf_max: typeof data.esf_max === 'number' ? data.esf_max : 2.00,
+          esf_step: typeof data.esf_step === 'number' ? data.esf_step : 0.25,
+          cil_min: typeof data.cil_min === 'number' ? data.cil_min : -2.00,
+          cil_max: typeof data.cil_max === 'number' ? data.cil_max : 0.00,
+          cil_step: typeof data.cil_step === 'number' ? data.cil_step : 0.25,
+        });
+      }
 
       setBranches(branchesData.filter(b => b.status === 'active'));
       setFamilies(familiesData);

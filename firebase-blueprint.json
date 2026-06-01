@@ -108,9 +108,29 @@
         "quantity": { "type": "integer" }
       },
       "required": ["sku_id", "quantity"]
+    },
+    "Configuracao": {
+      "title": "Configuracao",
+      "description": "Custom diopter constraints for the grid",
+      "type": "object",
+      "properties": {
+        "esf_min": { "type": "number" },
+        "esf_max": { "type": "number" },
+        "esf_step": { "type": "number" },
+        "cil_min": { "type": "number" },
+        "cil_max": { "type": "number" },
+        "cil_step": { "type": "number" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "updated_by": { "type": "string" }
+      },
+      "required": ["esf_min", "esf_max", "esf_step", "cil_min", "cil_max", "cil_step"]
     }
   },
   "firestore": {
+    "/configuracoes/{configId}": {
+      "schema": "Configuracao",
+      "description": "Custom store configuration settings"
+    },
     "/profiles/{userId}": {
       "schema": "Profile",
       "description": "User profiles"

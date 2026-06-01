@@ -12,10 +12,12 @@ import {
   History,
   Package,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Settings,
+  SlidersHorizontal
 } from 'lucide-react';
 import { db, auth, getCachedBranches, getCachedFamilies, getCachedSkus } from '@/src/lib/firebase';
-import { collection, getDocs, query, where, doc, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useAuth } from '@/src/hooks/useAuth';
 import { LensSku, InventoryItem, Branch, LensFamily } from '@/src/types';
 import { cn, formatRefraction, formatCylinder, generateSkuCode } from '@/src/lib/utils';
@@ -37,6 +39,59 @@ export default function Inventory() {
   const [appliedRefSearch, setAppliedRefSearch] = useState({ esf: '', cil: '', esfSign: '+' });
   const [isFilterActive, setIsFilterActive] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+
+  // Custom Diopter limits configuration retrieved from Firestore
+  const [gridConfig, setGridConfig] = useState({
+    esf_min: -2.00,
+    esf_max: 2.00,
+    esf_step: 0.25,
+    cil_min: -2.00,
+    cil_max: 0.00,
+    cil_step: 0.25
+  });
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [configForm, setConfigForm] = useState({
+    esf_min: '-2.00',
+    esf_max: '2.00',
+    esf_step: '0.25',
+    cil_min: '-2.00',
+    cil_max: '0.00',
+    cil_step: '0.25'
+  });
+  const [configSaving, setConfigSaving] = useState(false);
+
+  const fetchGridConfig = async () => {
+    try {
+      const docRef = doc(db, 'configuracoes', 'grade_limites');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const conf = {
+          esf_min: typeof data.esf_min === 'number' ? data.esf_min : -2.00,
+          esf_max: typeof data.esf_max === 'number' ? data.esf_max : 2.00,
+          esf_step: typeof data.esf_step === 'number' ? data.esf_step : 0.25,
+          cil_min: typeof data.cil_min === 'number' ? data.cil_min : -2.00,
+          cil_max: typeof data.cil_max === 'number' ? data.cil_max : 0.00,
+          cil_step: typeof data.cil_step === 'number' ? data.cil_step : 0.25,
+        };
+        setGridConfig(conf);
+        setConfigForm({
+          esf_min: conf.esf_min.toFixed(2),
+          esf_max: conf.esf_max.toFixed(2),
+          esf_step: conf.esf_step.toFixed(2),
+          cil_min: conf.cil_min.toFixed(2),
+          cil_max: conf.cil_max.toFixed(2),
+          cil_step: conf.cil_step.toFixed(2)
+        });
+      }
+    } catch (err) {
+      console.error("Erro ao carregar configurações de limites do Firestore:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchGridConfig();
+  }, []);
 
   const handleApplyFilter = () => {
     let formattedEsf = refSearch.esf.trim();
@@ -201,14 +256,30 @@ export default function Inventory() {
     setRefSearch(prev => ({ ...prev, cil: num.toFixed(2).replace('.', ',') }));
   };
 
-  // Dioptre Scales for Grid based on standard request (ESF: +2.00 to -2.00, CIL: 0.00 to -2.00)
+  // Dynamic scale generators using settings state (fallback to +2/-2 if invalid)
   const esfScale = React.useMemo(() => {
-    return Array.from({ length: 17 }, (_, i) => (2 - i * 0.25).toFixed(2)); // +2.00 to -2.00 (steps of 0.25)
-  }, []);
+    const min = parseFloat(String(gridConfig.esf_min));
+    const max = parseFloat(String(gridConfig.esf_max));
+    const step = parseFloat(String(gridConfig.esf_step)) || 0.25;
+    if (isNaN(min) || isNaN(max) || min >= max) {
+      return Array.from({ length: 17 }, (_, i) => (2 - i * 0.25).toFixed(2));
+    }
+    const len = Math.round((max - min) / step) + 1;
+    if (len <= 0 || len > 100) return Array.from({ length: 17 }, (_, i) => (2 - i * 0.25).toFixed(2));
+    return Array.from({ length: len }, (_, i) => (max - i * step).toFixed(2));
+  }, [gridConfig.esf_min, gridConfig.esf_max, gridConfig.esf_step]);
 
   const cilScale = React.useMemo(() => {
-    return Array.from({ length: 9 }, (_, i) => (-i * 0.25).toFixed(2)); // 0.00 to -2.00 (steps of 0.25)
-  }, []);
+    const min = parseFloat(String(gridConfig.cil_min));
+    const max = parseFloat(String(gridConfig.cil_max));
+    const step = parseFloat(String(gridConfig.cil_step)) || 0.25;
+    if (isNaN(min) || isNaN(max) || min >= max) {
+      return Array.from({ length: 9 }, (_, i) => (-i * 0.25).toFixed(2));
+    }
+    const len = Math.round((max - min) / step) + 1;
+    if (len <= 0 || len > 100) return Array.from({ length: 9 }, (_, i) => (-i * 0.25).toFixed(2));
+    return Array.from({ length: len }, (_, i) => (max - i * step).toFixed(2));
+  }, [gridConfig.cil_min, gridConfig.cil_max, gridConfig.cil_step]);
 
   // Modal states
   const [showModal, setShowModal] = useState<'entry' | 'exit' | null>(null);
@@ -232,6 +303,25 @@ export default function Inventory() {
     if (!newSkuId || !newBranchId) return;
     setMovementLoading(true);
     try {
+      // Validar limites das dioptrias do SKU contra configurações globais
+      const selectedSku = allSkus.find(s => s.id === newSkuId);
+      if (selectedSku) {
+        const esf = selectedSku.spherical !== undefined ? parseFloat(String(selectedSku.spherical)) : 0;
+        const cil = selectedSku.cylindrical !== undefined ? parseFloat(String(selectedSku.cylindrical)) : 0;
+
+        if (esf < gridConfig.esf_min || esf > gridConfig.esf_max) {
+          alert(`Erro: A dioptria esférica (ESF: ${esf >= 0 ? '+' : ''}${esf.toFixed(2)}) do SKU está fora dos limites configurados (${gridConfig.esf_min >= 0 ? '+' : ''}${gridConfig.esf_min.toFixed(2)} a ${gridConfig.esf_max >= 0 ? '+' : ''}${gridConfig.esf_max.toFixed(2)}).`);
+          setMovementLoading(false);
+          return;
+        }
+
+        if (cil < gridConfig.cil_min || cil > gridConfig.cil_max) {
+          alert(`Erro: A dioptria cilíndrica (CIL: ${cil >= 0 ? '+' : ''}${cil.toFixed(2)}) do SKU está fora dos limites configurados (${gridConfig.cil_min >= 0 ? '+' : ''}${gridConfig.cil_min.toFixed(2)} a ${gridConfig.cil_max >= 0 ? '+' : ''}${gridConfig.cil_max.toFixed(2)}).`);
+          setMovementLoading(false);
+          return;
+        }
+      }
+
       const invId = `${newBranchId}_${newSkuId}`;
       const invRef = doc(db, 'inventory', invId);
       
@@ -267,6 +357,20 @@ export default function Inventory() {
   const handleMovement = async () => {
     if (!selectedItem || !qty || parseInt(qty) <= 0) return;
     
+    // Validar limites das dioptrias do SKU selecionado contra configurações globais
+    const esf = selectedItem.sku?.spherical !== undefined ? parseFloat(String(selectedItem.sku.spherical)) : 0;
+    const cil = selectedItem.sku?.cylindrical !== undefined ? parseFloat(String(selectedItem.sku.cylindrical)) : 0;
+
+    if (esf < gridConfig.esf_min || esf > gridConfig.esf_max) {
+      alert(`Erro: A dioptria esférica (ESF: ${esf >= 0 ? '+' : ''}${esf.toFixed(2)}) do item está fora dos limites configurados (${gridConfig.esf_min >= 0 ? '+' : ''}${gridConfig.esf_min.toFixed(2)} a ${gridConfig.esf_max >= 0 ? '+' : ''}${gridConfig.esf_max.toFixed(2)}).`);
+      return;
+    }
+
+    if (cil < gridConfig.cil_min || cil > gridConfig.cil_max) {
+      alert(`Erro: A dioptria cilíndrica (CIL: ${cil >= 0 ? '+' : ''}${cil.toFixed(2)}) do item está fora dos limites configurados (${gridConfig.cil_min >= 0 ? '+' : ''}${gridConfig.cil_min.toFixed(2)} a ${gridConfig.cil_max >= 0 ? '+' : ''}${gridConfig.cil_max.toFixed(2)}).`);
+      return;
+    }
+
     setMovementLoading(true);
     const amount = parseInt(qty);
     const finalQty = showModal === 'entry' ? amount : -amount;
@@ -555,6 +659,14 @@ export default function Inventory() {
           <div className="flex items-center space-x-3">
             <button 
               onClick={() => {
+                setShowConfigModal(true);
+              }}
+              className="flex items-center px-4 py-2 bg-teal-50 text-brand-teal rounded-lg text-sm font-semibold hover:bg-teal-100 transition-colors cursor-pointer"
+            >
+              <SlidersHorizontal size={18} className="mr-2" /> Configurar Grade
+            </button>
+            <button 
+              onClick={() => {
                 fetchAllSkus();
                 setShowNewSkuModal(true);
               }}
@@ -700,8 +812,8 @@ export default function Inventory() {
             </button>
           </div>
           <div className="flex justify-between mt-1 text-[10px] text-slate-400 px-1 font-semibold">
-            <span>ESF: de +2,00 a -2,00</span>
-            <span>CIL: de 0,00 a -2,00</span>
+            <span>ESF: de {gridConfig.esf_max >= 0 ? `+${gridConfig.esf_max.toFixed(2).replace('.', ',')}` : gridConfig.esf_max.toFixed(2).replace('.', ',')} a {gridConfig.esf_min >= 0 ? `+${gridConfig.esf_min.toFixed(2).replace('.', ',')}` : gridConfig.esf_min.toFixed(2).replace('.', ',')}</span>
+            <span>CIL: de {gridConfig.cil_max >= 0 ? `+${gridConfig.cil_max.toFixed(2).replace('.', ',')}` : gridConfig.cil_max.toFixed(2).replace('.', ',')} a {gridConfig.cil_min >= 0 ? `+${gridConfig.cil_min.toFixed(2).replace('.', ',')}` : gridConfig.cil_min.toFixed(2).replace('.', ',')}</span>
           </div>
         </div>
 
@@ -1173,6 +1285,182 @@ export default function Inventory() {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Custom Grid Configurations Modal */}
+      <AnimatePresence>
+        {showConfigModal && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-100"
+            >
+              {/* Header */}
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <div className="flex items-center space-x-2.5">
+                  <div className="p-2 bg-brand-teal/10 rounded-lg text-brand-teal">
+                    <SlidersHorizontal size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">Limites da Grade (Dioptrias)</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Customize os limites para exibição e consulta automática.</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowConfigModal(false)}
+                  className="p-1 px-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-lg transition-all border-none focus:outline-none cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                setConfigSaving(true);
+                try {
+                  const esf_min = parseFloat(configForm.esf_min.replace(',', '.'));
+                  const esf_max = parseFloat(configForm.esf_max.replace(',', '.'));
+                  const esf_step = parseFloat(configForm.esf_step.replace(',', '.'));
+                  const cil_min = parseFloat(configForm.cil_min.replace(',', '.'));
+                  const cil_max = parseFloat(configForm.cil_max.replace(',', '.'));
+                  const cil_step = parseFloat(configForm.cil_step.replace(',', '.'));
+
+                  if (isNaN(esf_min) || isNaN(esf_max) || isNaN(esf_step) || isNaN(cil_min) || isNaN(cil_max) || isNaN(cil_step)) {
+                    alert('Por favor, insira valores numéricos válidos.');
+                    setConfigSaving(false);
+                    return;
+                  }
+
+                  if (esf_min >= esf_max) {
+                    alert('Limite mínimo de Esférico deve ser menor que o máximo.');
+                    setConfigSaving(false);
+                    return;
+                  }
+
+                  if (cil_min >= cil_max) {
+                    alert('Limite mínimo de Cilíndrico deve ser menor que o máximo.');
+                    setConfigSaving(false);
+                    return;
+                  }
+
+                  const newConfig = { esf_min, esf_max, esf_step, cil_min, cil_max, cil_step };
+                  await setDoc(doc(db, 'configuracoes', 'grade_limites'), {
+                    ...newConfig,
+                    updated_at: new Date().toISOString(),
+                    updated_by: auth.currentUser?.uid || 'system'
+                  });
+                  setGridConfig(newConfig);
+                  setShowConfigModal(false);
+                } catch (err) {
+                  console.error('Erro ao salvar limites personalizados:', err);
+                  alert('Erro ao salvar as configurações.');
+                } finally {
+                  setConfigSaving(false);
+                }
+              }} className="p-6 space-y-5">
+                {/* Esférico Section */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-1">Refração Esférica (ESF)</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 mb-1">Mínimo</label>
+                      <input 
+                        type="text"
+                        value={configForm.esf_min}
+                        onChange={(e) => setConfigForm(prev => ({ ...prev, esf_min: e.target.value }))}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-teal focus:border-brand-teal outline-none transition-all font-semibold"
+                        placeholder="-6.00"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 mb-1">Máximo</label>
+                      <input 
+                        type="text"
+                        value={configForm.esf_max}
+                        onChange={(e) => setConfigForm(prev => ({ ...prev, esf_max: e.target.value }))}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-teal focus:border-brand-teal outline-none transition-all font-semibold"
+                        placeholder="6.00"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 mb-1">Intervalo/Pulo</label>
+                      <input 
+                        type="text"
+                        value={configForm.esf_step}
+                        onChange={(e) => setConfigForm(prev => ({ ...prev, esf_step: e.target.value }))}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-teal focus:border-brand-teal outline-none transition-all font-semibold"
+                        placeholder="0.25"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cilíndrico Section */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-1">Refração Cilíndrica (CIL)</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 mb-1">Mínimo</label>
+                      <input 
+                        type="text"
+                        value={configForm.cil_min}
+                        onChange={(e) => setConfigForm(prev => ({ ...prev, cil_min: e.target.value }))}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-teal focus:border-brand-teal outline-none transition-all font-semibold"
+                        placeholder="-4.00"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 mb-1">Máximo</label>
+                      <input 
+                        type="text"
+                        value={configForm.cil_max}
+                        onChange={(e) => setConfigForm(prev => ({ ...prev, cil_max: e.target.value }))}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-teal focus:border-brand-teal outline-none transition-all font-semibold"
+                        placeholder="0.00"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 mb-1">Intervalo/Pulo</label>
+                      <input 
+                        type="text"
+                        value={configForm.cil_step}
+                        onChange={(e) => setConfigForm(prev => ({ ...prev, cil_step: e.target.value }))}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-teal focus:border-brand-teal outline-none transition-all font-semibold"
+                        placeholder="0.25"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex space-x-3 pt-4 border-t border-slate-100 justify-end">
+                  <button 
+                    type="button"
+                    onClick={() => setShowConfigModal(false)}
+                    className="px-4 py-2 border border-slate-200 text-slate-500 text-xs font-bold rounded-xl hover:bg-slate-50 cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={configSaving}
+                    className="px-5 py-2 bg-brand-teal text-white hover:bg-teal-700 text-xs font-bold rounded-xl cursor-pointer disabled:opacity-50"
+                  >
+                    {configSaving ? 'Salvando...' : 'Salvar Alterações'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>
