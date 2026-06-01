@@ -15,12 +15,20 @@ export function formatCurrency(value: number) {
 
 export function formatRefraction(value: number) {
   if (value === null || value === undefined) return '0,00';
-  return (value >= 0 ? '+' : '') + value.toFixed(2).replace('.', ',');
+  if (Math.abs(value) < 0.01) return '0,00';
+  return (value > 0 ? '+' : '') + value.toFixed(2).replace('.', ',');
+}
+
+export function formatCylinder(value: number) {
+  if (value === null || value === undefined) return '0,00';
+  const val = Number(value);
+  if (Math.abs(val) < 0.01) return '0,00';
+  return '-' + Math.abs(val).toFixed(2).replace('.', ',');
 }
 
 export function generateSkuCode(familyLine: string, esf: number, cil: number) {
   const esfStr = formatRefraction(esf);
-  const cilStr = formatRefraction(cil);
+  const cilStr = formatCylinder(cil);
   return `${familyLine.toUpperCase()}-ESF${esfStr}-CIL${cilStr}`;
 }
 

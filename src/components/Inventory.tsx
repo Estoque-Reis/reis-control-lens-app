@@ -18,7 +18,7 @@ import { db, auth, getCachedBranches, getCachedFamilies, getCachedSkus } from '@
 import { collection, getDocs, query, where, doc, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useAuth } from '@/src/hooks/useAuth';
 import { LensSku, InventoryItem, Branch, LensFamily } from '@/src/types';
-import { cn, formatRefraction, generateSkuCode } from '@/src/lib/utils';
+import { cn, formatRefraction, formatCylinder, generateSkuCode } from '@/src/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Inventory() {
@@ -601,22 +601,6 @@ export default function Inventory() {
                     <X size={16} />
                   </button>
                 )}
-                <div className="flex flex-col justify-center h-full w-6 animate-none shrink-0">
-                  <button 
-                    onClick={() => stepRefraction('esf', 'up')} 
-                    className="flex-grow flex items-center justify-center hover:bg-slate-200/50 text-slate-600 hover:text-brand-teal active:scale-95 transition-all h-1/2 cursor-pointer"
-                    title="Aumentar (+0.25)"
-                  >
-                    <ChevronUp size={14} strokeWidth={3} />
-                  </button>
-                  <button 
-                    onClick={() => stepRefraction('esf', 'down')} 
-                    className="flex-grow flex items-center justify-center hover:bg-slate-200/50 text-slate-600 hover:text-brand-teal active:scale-95 transition-all h-1/2 border-t border-slate-200/20 cursor-pointer"
-                    title="Diminuir (-0.25)"
-                  >
-                    <ChevronDown size={14} strokeWidth={3} />
-                  </button>
-                </div>
               </div>
             </div>
 
@@ -660,22 +644,6 @@ export default function Inventory() {
                     <X size={16} />
                   </button>
                 )}
-                <div className="flex flex-col justify-center h-full w-6 animate-none shrink-0">
-                  <button 
-                    onClick={() => stepRefraction('cil', 'up')} 
-                    className="flex-grow flex items-center justify-center hover:bg-slate-200/50 text-slate-600 hover:text-brand-teal active:scale-95 transition-all h-1/2 cursor-pointer"
-                    title="Aumentar (+0.25)"
-                  >
-                    <ChevronUp size={14} strokeWidth={3} />
-                  </button>
-                  <button 
-                    onClick={() => stepRefraction('cil', 'down')} 
-                    className="flex-grow flex items-center justify-center hover:bg-slate-200/50 text-slate-600 hover:text-brand-teal active:scale-95 transition-all h-1/2 border-t border-slate-200/20 cursor-pointer"
-                    title="Diminuir (-0.25)"
-                  >
-                    <ChevronDown size={14} strokeWidth={3} />
-                  </button>
-                </div>
               </div>
             </div>
 
@@ -792,7 +760,7 @@ export default function Inventory() {
                           </span>
                           <span className="text-slate-300">/</span>
                           <span className="inline-block px-2 py-1 bg-slate-100 rounded text-[10px] font-bold text-slate-600">
-                            {formatRefraction(item.sku?.cylindrical)}
+                            {formatCylinder(item.sku?.cylindrical)}
                           </span>
                         </div>
                       </td>
@@ -880,7 +848,7 @@ export default function Inventory() {
                 </div>
                 {cilScale.map(cil => (
                   <div key={cil} className="bg-slate-50 p-3 text-[10px] font-bold text-slate-600 text-center">
-                    {formatRefraction(parseFloat(cil))}
+                    {formatCylinder(parseFloat(cil))}
                   </div>
                 ))}
 

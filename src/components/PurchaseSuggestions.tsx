@@ -24,7 +24,7 @@ import {
 import { db, getCachedBranches, getCachedFamilies, getCachedSkus, clearCache } from '@/src/lib/firebase';
 import { collection, getDocs, writeBatch, doc } from 'firebase/firestore';
 import { Branch, LensFamily, LensSku } from '@/src/types';
-import { cn, formatRefraction, formatCurrency } from '@/src/lib/utils';
+import { cn, formatRefraction, formatCylinder, formatCurrency } from '@/src/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -468,7 +468,7 @@ export default function PurchaseSuggestions() {
                           E: {formatRefraction(item.spherical)}
                         </span>
                         <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded">
-                          C: {formatRefraction(item.cylindrical)}
+                          C: {formatCylinder(item.cylindrical)}
                         </span>
                       </div>
                     </td>

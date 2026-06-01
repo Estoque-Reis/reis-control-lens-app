@@ -21,7 +21,7 @@ import {
 import { db, getCachedBranches, getCachedFamilies, getCachedSkus } from '@/src/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { Branch, LensFamily, LensSku } from '@/src/types';
-import { cn, formatRefraction, generateSkuCode } from '@/src/lib/utils';
+import { cn, formatRefraction, formatCylinder, generateSkuCode } from '@/src/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -447,7 +447,7 @@ export default function BranchInventory() {
         item.family?.manufacturer || 'N/A',
         item.family?.line || 'N/A',
         formatRefraction(item.spherical),
-        formatRefraction(item.cylindrical)
+        formatCylinder(item.cylindrical)
       ];
       branches.forEach(b => {
         row.push(item.branchQtys[b.id] || 0);
@@ -475,7 +475,7 @@ export default function BranchInventory() {
         'Fabricante': item.family?.manufacturer || 'N/A',
         'Linha': item.family?.line || 'N/A',
         'Esférico': formatRefraction(item.spherical),
-        'Cilíndrico': formatRefraction(item.cylindrical)
+        'Cilíndrico': formatCylinder(item.cylindrical)
       };
       branches.forEach(b => {
         row[b.name] = item.branchQtys[b.id] || 0;
@@ -652,13 +652,6 @@ export default function BranchInventory() {
               </button>
 
               <div className="flex items-center space-x-1">
-                <button
-                  type="button"
-                  onClick={() => stepDioptre('esf', 'down')}
-                  className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-200 rounded"
-                >
-                  <Minus size={12} />
-                </button>
                 <input 
                   type="text" 
                   inputMode="decimal"
@@ -671,13 +664,6 @@ export default function BranchInventory() {
                   placeholder="0,00"
                   className="w-14 text-center bg-transparent border-none outline-none font-bold text-slate-700 text-xs px-0 overflow-hidden py-0 leading-none"
                 />
-                <button
-                  type="button"
-                  onClick={() => stepDioptre('esf', 'up')}
-                  className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-200 rounded"
-                >
-                  <Plus size={12} />
-                </button>
               </div>
             </div>
 
@@ -687,13 +673,6 @@ export default function BranchInventory() {
               <span className="text-xs font-black px-1.5 py-1 bg-red-100 text-red-600 rounded-lg">-</span>
 
               <div className="flex items-center space-x-1">
-                <button
-                  type="button"
-                  onClick={() => stepDioptre('cil', 'down')}
-                  className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-200 rounded"
-                >
-                  <Minus size={12} />
-                </button>
                 <input 
                   type="text" 
                   inputMode="decimal"
@@ -706,13 +685,6 @@ export default function BranchInventory() {
                   placeholder="0,00"
                   className="w-14 text-center bg-transparent border-none outline-none font-bold text-slate-700 text-xs px-0 overflow-hidden py-0 leading-none"
                 />
-                <button
-                  type="button"
-                  onClick={() => stepDioptre('cil', 'up')}
-                  className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-200 rounded"
-                >
-                  <Plus size={12} />
-                </button>
               </div>
             </div>
 
@@ -860,7 +832,7 @@ export default function BranchInventory() {
                           "inline-block font-mono text-xs font-bold px-2 py-0.5 rounded-md",
                           item.cylindrical !== 0 ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600"
                         )}>
-                          {formatRefraction(item.cylindrical)}
+                          {formatCylinder(item.cylindrical)}
                         </span>
                       </td>
 
@@ -908,7 +880,7 @@ export default function BranchInventory() {
                     </div>
                     {cilScale.map(cil => (
                       <div key={cil} className="bg-slate-50 p-4 text-[10px] font-extrabold text-slate-600 text-center flex items-center justify-center">
-                        {formatRefraction(parseFloat(cil))}
+                        {formatCylinder(parseFloat(cil))}
                       </div>
                     ))}
 
