@@ -1412,17 +1412,38 @@ export default function Inventory() {
                   />
                 </div>
 
-                {newSkuModalMode === 'writeoff' && (
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Motivo da Baixa</label>
-                    <textarea 
-                      value={newReason}
-                      onChange={(e) => setNewReason(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal text-sm font-medium h-20 resize-none"
-                      placeholder="Ex: Quebra, Perda, Ajuste físico de inventário..."
-                    />
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">
+                    {newSkuModalMode === 'entry' ? 'Identificação / Nota Fiscal / Observação (Opcional)' : 'Motivo da Baixa'}
+                  </label>
+                  <textarea 
+                    value={newReason}
+                    onChange={(e) => setNewReason(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal text-sm font-medium h-20 resize-none mb-2"
+                    placeholder={newSkuModalMode === 'entry' ? "Ex: NF-1052, Estoque inicial, Compra regular..." : "Ex: Quebra, Perda, Lente riscada..."}
+                  />
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    <span className="text-[10px] font-bold text-slate-400 self-center uppercase tracking-widest mr-1">Sugestões:</span>
+                    {(newSkuModalMode === 'entry' 
+                      ? ["Compra (Fábrica)", "Estoque Inicial", "Retorno de OS", "Ajuste de Saldo"] 
+                      : ["Venda Balcão (OS)", "Quebra no Corte", "Lente Riscada", "Garantia Hoya", "Ajuste Físico"]
+                    ).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setNewReason(m)}
+                        className={cn(
+                          "px-2.5 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer",
+                          newReason === m 
+                            ? "bg-brand-teal text-white border-brand-teal" 
+                            : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600"
+                        )}
+                      >
+                        {m}
+                      </button>
+                    ))}
                   </div>
-                )}
+                </div>
               </div>
 
               <div className="mt-8 flex space-x-3">
@@ -1497,13 +1518,36 @@ export default function Inventory() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Motivo / Observação</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                    {showModal === 'entry' ? 'Identificação / Nota / Observação' : 'Motivo / Observação'}
+                  </label>
                   <textarea 
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal h-24 resize-none"
-                    placeholder="Ex: Nota fiscal, Venda, Ajuste..."
+                    className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal h-24 resize-none mb-2"
+                    placeholder={showModal === 'entry' ? "Ex: NF-1250, Estoque Inicial, Compra..." : "Ex: Venda ao cliente, Lente riscada, Quebra..."}
                   />
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    <span className="text-[10px] font-bold text-slate-400 self-center uppercase tracking-widest mr-1">Sugestões:</span>
+                    {(showModal === 'entry' 
+                      ? ["Compra Fábrica", "Retorno de OS", "Lote Inicial", "Ajuste de Saldo"] 
+                      : ["Venda Balcão (OS)", "Quebra no Corte", "Lente Riscada", "Garantia Hoya", "Ajuste Físico"]
+                    ).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setReason(m)}
+                        className={cn(
+                          "px-2.5 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer",
+                          reason === m 
+                            ? "bg-brand-teal text-white border-brand-teal" 
+                            : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600"
+                        )}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 

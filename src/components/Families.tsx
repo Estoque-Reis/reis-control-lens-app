@@ -455,6 +455,66 @@ export default function LensFamilies() {
                 </button>
               </div>
 
+              {/* Hoya Reference Quick presets (only for creating new families) */}
+              {!editingFamily && (
+                <div className="mb-6 p-4 bg-gradient-to-r from-cyan-50/60 to-slate-50 border border-cyan-150/40 rounded-2xl">
+                  <div className="flex items-center space-x-2 text-brand-teal mb-2.5">
+                    <span className="text-[10px] font-black uppercase tracking-widest bg-cyan-100 text-brand-teal px-2 py-0.5 rounded-md">Referência Hoya 🇯🇵</span>
+                    <span className="text-xs font-bold text-slate-500">Preencha rapidamente com linhas de sucesso da marca:</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      {
+                        name: "Miyosmart 1.59",
+                        meta: "Policarbonato • No-Risk",
+                        data: { manufacturer: 'Hoya', line: 'MiYOSMART Vision', material: 'Policarbonato', index: '1.59', treatment: 'No-Risk', cost_price: '249,00', min_stock_per_sku: '8' }
+                      },
+                      {
+                        name: "Balansis 1.60",
+                        meta: "Progressiva • HVLL",
+                        data: { manufacturer: 'Hoya', line: 'Hoyalux Balansis', material: 'Resina', index: '1.60', treatment: 'Hi-Vision LongLife (HVLL)', cost_price: '349,90', min_stock_per_sku: '4' }
+                      },
+                      {
+                        name: "Nulux 1.50 Blue",
+                        meta: "Monofocal • BlueControl",
+                        data: { manufacturer: 'Hoya', line: 'Nulux Classic', material: 'Resina', index: '1.50', treatment: 'BlueControl', cost_price: '115,00', min_stock_per_sku: '10' }
+                      },
+                      {
+                        name: "Sync III 1.67",
+                        meta: "Antifadiga • HVLL",
+                        data: { manufacturer: 'Hoya', line: 'Sync III Active', material: 'Resina', index: '1.67', treatment: 'Hi-Vision LongLife (HVLL)', cost_price: '389,00', min_stock_per_sku: '6' }
+                      },
+                      {
+                        name: "Hilux 1.50 Clean",
+                        meta: "Monofocal • CleanExtra",
+                        data: { manufacturer: 'Hoya', line: 'Hilux Classic', material: 'Resina', index: '1.50', treatment: 'Hi-Vision CleanExtra', cost_price: '55,00', min_stock_per_sku: '12' }
+                      }
+                    ].map((tpl, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          setFormData({
+                            manufacturer: tpl.data.manufacturer,
+                            line: tpl.data.line,
+                            material: tpl.data.material,
+                            index: tpl.data.index,
+                            treatment: tpl.data.treatment,
+                            cost_price: tpl.data.cost_price,
+                            min_stock_per_sku: tpl.data.min_stock_per_sku
+                          });
+                        }}
+                        className="text-left bg-white hover:bg-slate-100/90 border border-slate-200 rounded-xl px-2.5 py-1.5 text-[11px] font-bold shadow-xs hover:border-brand-teal transition-all flex flex-col cursor-pointer"
+                        title={tpl.meta}
+                      >
+                        <span className="text-slate-800 font-extrabold">{tpl.name}</span>
+                        <span className="text-[9px] text-slate-400 font-semibold">{tpl.meta}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Fabricante</label>

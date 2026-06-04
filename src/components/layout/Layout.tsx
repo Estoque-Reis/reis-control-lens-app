@@ -18,7 +18,8 @@ import {
   Copy,
   Check,
   ExternalLink,
-  QrCode
+  QrCode,
+  HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '@/src/hooks/useAuth';
@@ -36,6 +37,64 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tourStep, setTourStep] = useState(0);
+
+  React.useEffect(() => {
+    const tourCompleted = localStorage.getItem('controle_lens_tour_completed');
+    if (!tourCompleted) {
+      setTourOpen(true);
+    }
+  }, []);
+
+  const tourSteps = [
+    {
+      title: "Boas-vindas ao Reis Controle Lens! 👓",
+      message: "Vamos fazer um tour rápido de 1 minuto para que você domine a gestão inteligente do estoque de suas lentes com precisão de laboratório.",
+      route: "dashboard"
+    },
+    {
+      title: "Estoque por Filial (Grade Real) 🏪",
+      message: "Aqui em 'Estoque por Filial' você consulta o estoque instantâneo em formato matricial (Esférico por Cilíndrico), idêntico às grades de laboratórios de lentes (como Hoya). Você pode exportar dados em PDF ou Excel corporativos com um clique!",
+      route: "branch_inventory"
+    },
+    {
+      title: "Transferências Seguras entre Filiais 🔄",
+      message: "Se precisar remanejar lentes para outra filial, use esta tela. O estoque de origem reduz e o de destino aumenta em uma única transação segura, com logs auditados.",
+      route: "transfers"
+    },
+    {
+      title: "Famílias de Lentes (Catálogo) 🇯🇵",
+      message: "Aqui cadastramos os modelos de lentes e suas especificações (gama, índice de refração, material, tratamentos Hoya). A partir da família, você gera a grade completa de dioptrias em lote com um clique!",
+      route: "families"
+    }
+  ];
+
+  const handleNextTourStep = () => {
+    if (tourStep < tourSteps.length - 1) {
+      const nextStep = tourStep + 1;
+      setTourStep(nextStep);
+      onNavigate(tourSteps[nextStep].route);
+    } else {
+      handleCompleteTour();
+    }
+  };
+
+  const handlePrevTourStep = () => {
+    if (tourStep > 0) {
+      const prevStep = tourStep - 1;
+      setTourStep(prevStep);
+      onNavigate(tourSteps[prevStep].route);
+    }
+  };
+
+  const handleCompleteTour = () => {
+    localStorage.setItem('controle_lens_tour_completed', 'true');
+    setTourOpen(false);
+    setTourStep(0);
+    onNavigate('dashboard');
+  };
 
   const getPublicShareUrl = () => {
     const origin = window.location.origin;
@@ -261,6 +320,19 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
 
           <div className="flex items-center space-x-6">
             <button 
+              onClick={() => {
+                setTourStep(0);
+                onNavigate('dashboard');
+                setTourOpen(true);
+              }}
+              className="flex items-center space-x-2 px-3.5 py-2 bg-cyan-50 text-brand-teal hover:bg-cyan-100/80 rounded-xl text-xs font-semibold hover:text-teal-800 transition-all cursor-pointer border border-cyan-100 shadow-sm whitespace-nowrap"
+              title="Iniciar Tour Guiado explicativo"
+            >
+              <HelpCircle size={15} className="text-brand-teal" />
+              <span>Tour Guiado</span>
+            </button>
+
+            <button 
               onClick={() => setShareModalOpen(true)}
               className="flex items-center space-x-2 px-3.5 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100/80 rounded-xl text-xs font-bold transition-all cursor-pointer border border-emerald-100 shadow-sm whitespace-nowrap"
               title="Compartilhar acesso com consultores para celular"
@@ -437,6 +509,100 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
                       >
                         Fechar
                       </button>
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Onboarding Tour Modal */}
+        <AnimatePresence>
+          {tourOpen && (
+            <div className="fixed inset-0 z-[100] overflow-y-auto flex items-center justify-center">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={handleCompleteTour}
+                className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+              />
+
+              <div className="flex min-h-full items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 30 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 30 }}
+                  transition={{ type: "spring", duration: 0.5 }}
+                  className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white p-8 shadow-2xl border border-slate-100 z-[101]"
+                >
+                  <button 
+                    onClick={handleCompleteTour}
+                    className="absolute right-4 top-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                  >
+                    <X size={20} />
+                  </button>
+
+                  <div className="text-center sm:text-left">
+                    <div className="mx-auto sm:mx-0 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-50 text-brand-teal mb-5 ring-4 ring-cyan-50">
+                      <HelpCircle size={28} className="animate-pulse" />
+                    </div>
+
+                    <div className="flex items-center space-x-2 mb-2">
+                      <span className="text-[10px] font-black uppercase tracking-widest bg-cyan-100 text-brand-teal px-2 py-0.5 rounded">
+                        Guia Explicativo
+                      </span>
+                      <span className="text-[11px] font-bold text-slate-400">
+                        Passo {tourStep + 1} de {tourSteps.length}
+                      </span>
+                    </div>
+
+                    <h3 className="text-xl font-extrabold text-slate-900 leading-tight">
+                      {tourSteps[tourStep].title}
+                    </h3>
+                    
+                    <p className="mt-3.5 text-sm text-slate-500 leading-relaxed font-semibold">
+                      {tourSteps[tourStep].message}
+                    </p>
+
+                    {/* Progress Dots */}
+                    <div className="mt-6 flex justify-center sm:justify-start space-x-1.5">
+                      {tourSteps.map((_, idx) => (
+                        <div 
+                          key={idx}
+                          className={cn(
+                            "h-1.5 rounded-full transition-all duration-300",
+                            idx === tourStep ? "bg-brand-teal w-6" : "bg-slate-200 w-1.5"
+                          )}
+                        />
+                      ))}
+                    </div>
+
+                    <div className="mt-8 pt-5 border-t border-slate-100 flex items-center justify-between gap-3">
+                      <button
+                        onClick={handleCompleteTour}
+                        className="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                      >
+                        Pular Tour
+                      </button>
+
+                      <div className="flex gap-2">
+                        {tourStep > 0 && (
+                          <button
+                            onClick={handlePrevTourStep}
+                            className="px-4 py-2 bg-slate-150 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                          >
+                            Anterior
+                          </button>
+                        )}
+                        <button
+                          onClick={handleNextTourStep}
+                          className="px-5 py-2.5 bg-brand-teal text-white hover:bg-teal-700 text-xs font-bold rounded-xl shadow-lg shadow-teal-900/15 transition-all cursor-pointer"
+                        >
+                          {tourStep === tourSteps.length - 1 ? 'Finalizar' : 'Próximo'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </motion.div>

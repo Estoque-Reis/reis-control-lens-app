@@ -457,6 +457,24 @@ export default function Transfers() {
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal"
                     placeholder="Ex: Reposição, Venda..."
                   />
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    <span className="text-[10px] font-bold text-slate-400 self-center uppercase tracking-widest mr-1">Sugestões:</span>
+                    {["Reposição de Giro", "Venda de OS Urgente", "Empréstimo", "Consolidar Estoque"].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setReason(m)}
+                        className={cn(
+                          "px-2.5 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer",
+                          reason === m 
+                            ? "bg-brand-teal text-white border-brand-teal animate-none" 
+                            : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600"
+                        )}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
