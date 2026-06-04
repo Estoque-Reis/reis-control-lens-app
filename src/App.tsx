@@ -9,6 +9,7 @@ import Families from '@/src/components/Families';
 import Branches from '@/src/components/Branches';
 import UsersList from '@/src/components/Users';
 import Reports from '@/src/components/Reports';
+import ReportsFamily from '@/src/components/ReportsFamily';
 import Transfers from '@/src/components/Transfers';
 import BranchInventory from '@/src/components/BranchInventory';
 import PurchaseSuggestions from '@/src/components/PurchaseSuggestions';
@@ -24,7 +25,8 @@ type AppRoute =
   | 'branches' 
   | 'users' 
   | 'families' 
-  | 'reports';
+  | 'reports'
+  | 'reports_family';
 
 export default function App() {
   const { user, profile, loading } = useAuth();
@@ -114,6 +116,8 @@ export default function App() {
         return <UsersList />;
       case 'reports':
         return <Reports />;
+      case 'reports_family':
+        return <ReportsFamily />;
       case 'transfers':
         return <Transfers />;
       default:

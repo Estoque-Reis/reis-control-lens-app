@@ -99,7 +99,16 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
     { id: 'families', label: 'Famílias de Lentes', icon: Library, roles: ['admin'] },
     { id: 'branches', label: 'Filiais', icon: MapPin, roles: ['admin'] },
     { id: 'users', label: 'Usuários', icon: Users, roles: ['admin'] },
-    { id: 'reports', label: 'Relatórios', icon: FileText, roles: ['admin'] },
+    { 
+      id: 'reports', 
+      label: 'Relatórios', 
+      icon: FileText, 
+      roles: ['admin'],
+      subItems: [
+        { id: 'reports', label: 'Exportações Gerais', roles: ['admin'] },
+        { id: 'reports_family', label: 'Estoque por Família', roles: ['admin'] }
+      ]
+    },
   ];
 
   const filteredMenu = menuItems.filter(item => 
@@ -117,6 +126,7 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
       case 'branches': return 'Filiais Ativas';
       case 'users': return 'Controle de Usuários';
       case 'reports': return 'Relatórios e Exportações';
+      case 'reports_family': return 'Estoque Tratado por Família';
       default: return route;
     }
   };
