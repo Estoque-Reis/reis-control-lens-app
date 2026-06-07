@@ -56,7 +56,7 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
     },
     {
       title: "Estoque por Filial (Grade Real) 🏪",
-      message: "Aqui em 'Estoque por Filial' você consulta o estoque instantâneo em formato matricial (Esférico por Cilíndrico), idêntico às grades de laboratórios de lentes (como Hoya). Você pode exportar dados em PDF ou Excel corporativos com um clique!",
+      message: "Aqui em 'Estoque por Filial' você consulta o estoque instantâneo em formato matricial (Esférico por Cilíndrico), idêntico às grades de renomados laboratórios de lentes. Você pode exportar dados em PDF ou Excel corporativos com um clique!",
       route: "branch_inventory"
     },
     {
@@ -66,7 +66,7 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
     },
     {
       title: "Famílias de Lentes (Catálogo) 🇯🇵",
-      message: "Aqui cadastramos os modelos de lentes e suas especificações (gama, índice de refração, material, tratamentos Hoya). A partir da família, você gera a grade completa de dioptrias em lote com um clique!",
+      message: "Aqui cadastramos os modelos de lentes e suas especificações (gama, índice de refração, material, tratamentos especiais e premium). A partir da família, você gera a grade completa de dioptrias em lote com um clique!",
       route: "families"
     }
   ];

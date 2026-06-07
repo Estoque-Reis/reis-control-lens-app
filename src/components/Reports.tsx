@@ -1,566 +1,1338 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   FileText, 
   Download, 
   FileSpreadsheet, 
   BarChart3, 
-  PieChart as PieIcon,
-  ChevronRight,
   TrendingUp,
   AlertCircle,
-  ShoppingCart,
   Loader2,
   ArrowLeftRight,
-  Truck,
   RefreshCw,
   Search,
-  X,
   CheckCircle2,
-  HelpCircle
+  Calendar,
+  Building2,
+  FileDown,
+  DollarSign,
+  Layers,
+  Inbox,
+  Layers2,
+  ChevronRight
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { db, getCachedBranches, getCachedFamilies, getCachedSkus } from '@/src/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import { cn, formatCurrency, formatRefraction, formatCylinder } from '@/src/lib/utils';
+
+// Types for raw inputs
+interface Branch {
+  id: string;
+  name: string;
+  code: string;
+  status?: string;
+}
+
+interface Sku {
+  id: string;
+  family_id: string;
+  sku_code: string;
+  spherical: number;
+  cylindrical: number;
+}
+
+interface Family {
+  id: string;
+  manufacturer: string;
+  line: string;
+  material: string;
+  index: string;
+  treatment: string;
+  cost_price: number;
+  min_stock_per_sku: number;
+}
+
+interface InventoryItem {
+  id: string;
+  branch_id: string;
+  sku_id: string;
+  quantity: number;
+  updated_at?: any;
+}
+
+interface MovementItem {
+  id: string;
+  branch_id: string;
+  sku_id: string;
+  type: string;
+  quantity: number;
+  reason: string;
+  created_at?: any;
+  user_id?: string;
+}
+
+type ReportType = 
+  | 'inventory_current' 
+  | 'inventory_consolidated' 
+  | 'low_stock' 
+  | 'out_of_stock' 
+  | 'movements' 
+  | 'financial_valuation';
 
 export default function Reports() {
-  const [loading, setLoading] = useState(false);
-  const [simulatorData, setSimulatorData] = useState<any[]>([]);
-  const [simLoading, setSimLoading] = useState(false);
-  const [showSimulator, setShowSimulator] = useState(false);
-  const [filterRupturesOnly, setFilterRupturesOnly] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [rawInventory, setRawInventory] = useState<InventoryItem[]>([]);
+  const [rawMovements, setRawMovements] = useState<MovementItem[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [families, setFamilies] = useState<Family[]>([]);
+  const [skus, setSkus] = useState<Sku[]>([]);
+
+  // Filtering criteria
+  const [selectedReportId, setSelectedReportId] = useState<ReportType>('inventory_current');
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('all');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   const reportTypes = [
     { 
-      id: 'inventory_current', 
+      id: 'inventory_current' as ReportType, 
       title: 'Estoque Atual por Filial', 
-      desc: 'Lista consolidada de todos os produtos disponíveis em cada loja.',
+      desc: 'Lista consolidada de todos os produtos físicos disponíveis em cada loja em tempo real.',
       icon: BarChart3,
-      color: 'bg-blue-500'
+      color: 'bg-teal-500 text-teal-600 border-teal-100 bg-teal-50/50'
     },
     { 
-      id: 'low_stock', 
+      id: 'inventory_consolidated' as ReportType, 
+      title: 'Estoque Consolidado da Rede', 
+      desc: 'Visualização agrupada por SKU com a soma total de itens em toda a rede de lojas.',
+      icon: Layers,
+      color: 'bg-blue-500 text-blue-600 border-blue-100 bg-blue-50/50'
+    },
+    { 
+      id: 'low_stock' as ReportType, 
       title: 'Itens Abaixo do Mínimo', 
-      desc: 'Relatório crítico de reposição para evitar ruptura de estoque.',
+      desc: 'Alerta crítico de reposição de itens cujo estoque atingiu valores abaixo do mínimo exigido.',
       icon: AlertCircle,
-      color: 'bg-red-500'
+      color: 'bg-amber-500 text-amber-600 border-amber-100 bg-amber-50/50'
     },
     { 
-      id: 'purchase_suggestions', 
-      title: 'Sugestões de Compra', 
-      desc: 'Sugestões automáticas baseadas em estoque mínimo e giro.',
-      icon: ShoppingCart,
-      color: 'bg-purple-500'
+      id: 'out_of_stock' as ReportType, 
+      title: 'Itens Sem Estoque', 
+      desc: 'Lista de produtos sem nenhuma unidade remanescente para identificação de rupturas.',
+      icon: Inbox,
+      color: 'bg-rose-500 text-rose-600 border-rose-100 bg-rose-50/50'
     },
     { 
-      id: 'interbranch_replenishments', 
-      title: 'Ressuprimento Inter-Filiais', 
-      desc: 'Sugere transferências estratégicas de lojas com estoque excedente para suprir ruptura de outras.',
-      icon: ArrowLeftRight,
-      color: 'bg-teal-500'
-    },
-    { 
-      id: 'movements', 
+      id: 'movements' as ReportType, 
       title: 'Movimentações do Período', 
-      desc: 'Histórico detalhado de entradas, saídas e transferências.',
+      desc: 'Rastreamento completo do fluxo de entradas, saídas, baixas e transferências lançadas.',
       icon: TrendingUp,
-      color: 'bg-emerald-500'
+      color: 'bg-emerald-500 text-emerald-600 border-emerald-100 bg-emerald-50/50'
+    },
+    { 
+      id: 'financial_valuation' as ReportType, 
+      title: 'Valor Financeiro do Estoque', 
+      desc: 'Cálculo monetário do capital investido em mercadorias a preço de custo do fabricante.',
+      icon: DollarSign,
+      color: 'bg-indigo-500 text-indigo-600 border-indigo-100 bg-indigo-50/50'
     }
   ];
 
-  const fetchFullInventoryData = async () => {
-    const [invSnap, skus, families, branches] = await Promise.all([
-      getDocs(collection(db, 'inventory')),
-      getCachedSkus(),
-      getCachedFamilies(),
-      getCachedBranches()
-    ]);
-
-    const items = invSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-    
-    // Build maps for fast O(1) in-memory lookup
-    const skusMap = new Map<string, any>(skus.map(s => [s.id, s]));
-    const familiesMap = new Map<string, any>(families.map(f => [f.id, f]));
-    const branchesMap = new Map<string, any>(branches.map(b => [b.id, b]));
-    
-    const data = [];
-    for (const item of items) {
-      const sku = skusMap.get(item.sku_id);
-      if (sku) {
-        const family = familiesMap.get(sku.family_id);
-        const branch = branchesMap.get(item.branch_id);
-        
-        data.push({
-          sku_code: sku.sku_code,
-          manufacturer: family ? family.manufacturer : 'N/A',
-          line: family ? family.line : 'N/A',
-          quantity: item.quantity,
-          min_stock: family ? family.min_stock_per_sku : 0,
-          branch: branch ? branch.name : item.branch_id
-        });
-      }
-    }
-    return data;
-  };
-
-  const fetchInterBranchReplenishmentData = async () => {
-    const [invSnap, skus, families, branches] = await Promise.all([
-      getDocs(collection(db, 'inventory')),
-      getCachedSkus(),
-      getCachedFamilies(),
-      getCachedBranches()
-    ]);
-
-    const items = invSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-    
-    const skusMap = new Map<string, any>(skus.map(s => [s.id, s]));
-    const familiesMap = new Map<string, any>(families.map(f => [f.id, f]));
-    const branchesMap = new Map<string, any>(branches.map(b => [b.id, b]));
-
-    // Construct Stock Matrix: stockMatrix[sku_id][branch_id] = quantity
-    const stockMatrix: Record<string, Record<string, number>> = {};
-    for (const item of items) {
-      if (!stockMatrix[item.sku_id]) {
-        stockMatrix[item.sku_id] = {};
-      }
-      stockMatrix[item.sku_id][item.branch_id] = item.quantity;
-    }
-
-    const suggestions: any[] = [];
-
-    // Loop through each SKU
-    for (const sku of skus) {
-      const family = familiesMap.get(sku.family_id);
-      const minStock = family ? family.min_stock_per_sku : 0;
-      if (minStock <= 0) continue;
-
-      const skusWithStock = stockMatrix[sku.id] || {};
-
-      const deficits: { branchId: string; branchName: string; needed: number; originalQty: number }[] = [];
-      const surpluses: { branchId: string; branchName: string; available: number; originalQty: number }[] = [];
-
-      for (const branch of branches) {
-        if (branch.status === 'inactive') continue;
-        const currentQty = skusWithStock[branch.id] || 0;
-        const diff = currentQty - minStock;
-
-        if (diff < 0) {
-          deficits.push({
-            branchId: branch.id,
-            branchName: branch.name,
-            needed: Math.abs(diff),
-            originalQty: currentQty
-          });
-        } else if (diff > 0) {
-          surpluses.push({
-            branchId: branch.id,
-            branchName: branch.name,
-            available: diff,
-            originalQty: currentQty
-          });
-        }
-      }
-
-      // Pair them up
-      deficits.sort((a, b) => b.needed - a.needed);
-      surpluses.sort((a, b) => b.available - a.available);
-
-      let dIdx = 0;
-      let sIdx = 0;
-
-      while (dIdx < deficits.length && sIdx < surpluses.length) {
-        const d = deficits[dIdx];
-        const s = surpluses[sIdx];
-
-        const transferQty = Math.min(d.needed, s.available);
-        if (transferQty > 0) {
-          suggestions.push({
-            sku_id: sku.id,
-            sku_code: sku.sku_code,
-            manufacturer: family ? family.manufacturer : 'N/A',
-            line: family ? family.line : 'N/A',
-            spherical: sku.spherical,
-            cylindrical: sku.cylindrical,
-            origin_branch_id: s.branchId,
-            origin_branch_name: s.branchName,
-            origin_stock: s.originalQty,
-            destination_branch_id: d.branchId,
-            destination_branch_name: d.branchName,
-            destination_stock: d.originalQty,
-            min_stock: minStock,
-            transfer_qty: transferQty,
-            is_absolute_rupture: d.originalQty === 0
-          });
-
-          d.needed -= transferQty;
-          s.available -= transferQty;
-        }
-
-        if (d.needed === 0) dIdx++;
-        if (s.available === 0) sIdx++;
-      }
-    }
-
-    return suggestions;
-  };
-
-  const handleLoadSimulator = async () => {
-    setSimLoading(true);
-    try {
-      const data = await fetchInterBranchReplenishmentData();
-      setSimulatorData(data);
-      setShowSimulator(true);
-      // Wait a short delay and scroll into view
-      setTimeout(() => {
-        const element = document.getElementById('interbranch-simulator-panel');
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth' });
-        }
-      }, 100);
-    } catch (err) {
-      console.error("Erro ao simular ressuprimento:", err);
-      alert("Erro ao calcular rota de ressuprimento.");
-    } finally {
-      setSimLoading(false);
-    }
-  };
-
-  const handleGenerateReport = async (type: string, format: 'pdf' | 'excel') => {
+  // Load and cache datasets
+  const loadData = async (forceRefresh = false) => {
     setLoading(true);
     try {
-      let title = reportTypes.find(r => r.id === type)?.title || 'Relatório';
+      const [invSnap, movSnap, branchesList, familiesList, skusList] = await Promise.all([
+        getDocs(collection(db, 'inventory')),
+        getDocs(collection(db, 'movements')),
+        getCachedBranches(forceRefresh),
+        getCachedFamilies(forceRefresh),
+        getCachedSkus(forceRefresh)
+      ]);
 
-      if (type === 'interbranch_replenishments') {
-        const repData = await fetchInterBranchReplenishmentData();
-        if (format === 'pdf') {
-          const docPDF = new jsPDF();
-          docPDF.text(`Controle de Lentes Reis - ${title}`, 14, 15);
-          docPDF.text(`Gerado em: ${new Date().toLocaleString()}`, 14, 25);
-          
-          const head = [['SKU', 'Fabricante', 'Origem (Excedente)', 'Destino (Ruptura)', 'Quantidade Sugerida', 'Status Destino']];
-          const body = repData.map(i => [
-            i.sku_code,
-            `${i.manufacturer} ${i.line}`,
-            `${i.origin_branch_name} (Estoque: ${i.origin_stock})`,
-            `${i.destination_branch_name} (Estoque: ${i.destination_stock})`,
-            i.transfer_qty,
-            i.is_absolute_rupture ? 'Ruptura Total (Estoque 0)' : 'Abaixo do Mínimo'
-          ]);
-
-          autoTable(docPDF, { startY: 35, head, body });
-          docPDF.save(`${title.toLowerCase().replace(/ /g, '_')}.pdf`);
-        } else {
-          const excelData = repData.map(i => ({
-            'SKU': i.sku_code,
-            'Fabricante': i.manufacturer,
-            'Linha': i.line,
-            'Filial Origem': i.origin_branch_name,
-            'Estoque Origem': i.origin_stock,
-            'Filial Destino': i.destination_branch_name,
-            'Estoque Destino': i.destination_stock,
-            'Mínimo por Loja': i.min_stock,
-            'Quantidade a Transferir': i.transfer_qty,
-            'Situação Destino': i.is_absolute_rupture ? 'Ruptura Total (Estoque 0)' : 'Abaixo do Mínimo'
-          }));
-          const ws = XLSX.utils.json_to_sheet(excelData);
-          const wb = XLSX.utils.book_new();
-          XLSX.utils.book_append_sheet(wb, ws, title);
-          XLSX.writeFile(wb, `${title.toLowerCase().replace(/ /g, '_')}.xlsx`);
-        }
-        return;
-      }
-
-      let data = await fetchFullInventoryData();
-
-      if (type === 'low_stock' || type === 'purchase_suggestions') {
-        data = data.filter(item => item.quantity < item.min_stock);
-        if (type === 'purchase_suggestions') {
-          data = data.map(item => ({
-            ...item,
-            suggestion: item.min_stock - item.quantity
-          }));
-        }
-      }
-
-      if (format === 'pdf') {
-        const docPDF = new jsPDF();
-        docPDF.text(`Controle de Lentes Reis - ${title}`, 14, 15);
-        docPDF.text(`Gerado em: ${new Date().toLocaleString()}`, 14, 25);
-        
-        const head = type === 'purchase_suggestions' 
-          ? [['SKU', 'Fabricante', 'Filial', 'Estoque', 'Mínimo', 'Sugestão Compra']]
-          : [['SKU', 'Fabricante', 'Filial', 'Estoque', 'Mínimo']];
-        
-        const body = data.map(i => {
-          const row = [i.sku_code, i.manufacturer, i.branch, i.quantity, i.min_stock];
-          if (type === 'purchase_suggestions') row.push(i.suggestion);
-          return row;
-        });
-
-        autoTable(docPDF, { startY: 35, head, body });
-        docPDF.save(`${title.toLowerCase().replace(/ /g, '_')}.pdf`);
-      } else {
-        const ws = XLSX.utils.json_to_sheet(data);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, title);
-        XLSX.writeFile(wb, `${title.toLowerCase().replace(/ /g, '_')}.xlsx`);
-      }
+      setRawInventory(invSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem)));
+      setRawMovements(movSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as MovementItem)));
+      setBranches(branchesList.filter(b => b.status !== 'inactive'));
+      setFamilies(familiesList);
+      setSkus(skusList);
     } catch (err) {
-      console.error("Erro ao gerar relatório:", err);
-      alert("Erro ao gerar relatório.");
+      console.error("Erro ao carregar dados dos relatórios:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredSimData = simulatorData.filter(item => {
-    const s = searchQuery.toLowerCase();
-    const matchesSearch = 
-      String(item?.sku_code || '').toLowerCase().includes(s) ||
-      String(item?.origin_branch_name || '').toLowerCase().includes(s) ||
-      String(item?.destination_branch_name || '').toLowerCase().includes(s) ||
-      String(item?.manufacturer || '').toLowerCase().includes(s) ||
-      String(item?.line || '').toLowerCase().includes(s);
+  useEffect(() => {
+    loadData();
+  }, []);
 
-    const matchesRupture = !filterRupturesOnly || item.is_absolute_rupture;
+  const parseFirestoreDate = (val: any): Date | null => {
+    if (!val) return null;
+    if (typeof val.toDate === 'function') return val.toDate();
+    if (val.seconds) return new Date(val.seconds * 1000);
+    if (typeof val === 'string' || typeof val === 'number') return new Date(val);
+    return null;
+  };
 
-    return matchesSearch && matchesRupture;
-  });
+  const isDateInRange = (date: Date | null, start: string, end: string) => {
+    if (!date) return !start && !end;
+    if (start) {
+      const startDateUTC = new Date(start + 'T00:00:00');
+      if (date < startDateUTC) return false;
+    }
+    if (end) {
+      const endDateUTC = new Date(end + 'T23:59:59');
+      if (date > endDateUTC) return false;
+    }
+    return true;
+  };
+
+  const formatDate = (date: Date | null) => {
+    if (!date) return 'N/A';
+    return date.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // Memoized maps for rapid lookup
+  const skusMap = React.useMemo(() => new Map<string, Sku>(skus.map(s => [s.id, s])), [skus]);
+  const familiesMap = React.useMemo(() => new Map<string, Family>(families.map(f => [f.id, f])), [families]);
+  const branchesMap = React.useMemo(() => new Map<string, Branch>(branches.map(b => [b.id, b])), [branches]);
+
+  // Compute processed records for current selection
+  const computedDataAll = React.useMemo(() => {
+    if (loading) return [];
+
+    switch (selectedReportId) {
+      case 'inventory_current': {
+        const result: any[] = [];
+        for (const item of rawInventory) {
+          // Branch filter
+          if (selectedBranchId !== 'all' && item.branch_id !== selectedBranchId) continue;
+
+          const sku = skusMap.get(item.sku_id);
+          const branch = branchesMap.get(item.branch_id);
+          if (!sku || !branch) continue;
+
+          const family = familiesMap.get(sku.family_id);
+          const updateDate = parseFirestoreDate(item.updated_at);
+
+          // Date filter
+          if (!isDateInRange(updateDate, startDate, endDate)) continue;
+
+          result.push({
+            id: item.id,
+            branch_id: item.branch_id,
+            branch_name: branch.name,
+            sku_id: item.sku_id,
+            sku_code: sku.sku_code,
+            manufacturer: family?.manufacturer || 'N/A',
+            line: family?.line || 'N/A',
+            spherical: sku.spherical,
+            cylindrical: sku.cylindrical,
+            quantity: item.quantity,
+            updated_at: updateDate,
+            formatted_date: formatDate(updateDate),
+          });
+        }
+        return result;
+      }
+
+      case 'inventory_consolidated': {
+        // Group inventory by SKU
+        const skuGroups: Record<string, { sku_id: string; total_quantity: number; branch_counts: Set<string>; last_updated: Date | null }> = {};
+        
+        for (const item of rawInventory) {
+          // If filtering by branch, only include that branch's contribution
+          if (selectedBranchId !== 'all' && item.branch_id !== selectedBranchId) continue;
+
+          const updateDate = parseFirestoreDate(item.updated_at);
+          if (!isDateInRange(updateDate, startDate, endDate)) continue;
+
+          if (!skuGroups[item.sku_id]) {
+            skuGroups[item.sku_id] = {
+              sku_id: item.sku_id,
+              total_quantity: 0,
+              branch_counts: new Set(),
+              last_updated: null
+            };
+          }
+
+          skuGroups[item.sku_id].total_quantity += item.quantity || 0;
+          if (item.quantity > 0) {
+            skuGroups[item.sku_id].branch_counts.add(item.branch_id);
+          }
+
+          if (updateDate) {
+            if (!skuGroups[item.sku_id].last_updated || updateDate > skuGroups[item.sku_id].last_updated!) {
+              skuGroups[item.sku_id].last_updated = updateDate;
+            }
+          }
+        }
+
+        const result: any[] = [];
+        for (const key of Object.keys(skuGroups)) {
+          const group = skuGroups[key];
+          const sku = skusMap.get(group.sku_id);
+          if (!sku) continue;
+
+          const family = familiesMap.get(sku.family_id);
+          const branchesListNames = Array.from(group.branch_counts)
+            .map(bId => branchesMap.get(bId)?.name || bId)
+            .join(', ');
+
+          result.push({
+            id: group.sku_id,
+            sku_code: sku.sku_code,
+            manufacturer: family?.manufacturer || 'N/A',
+            line: family?.line || 'N/A',
+            spherical: sku.spherical,
+            cylindrical: sku.cylindrical,
+            total_quantity: group.total_quantity,
+            branches_count: group.branch_counts.size,
+            branches_stocked: branchesListNames || 'Nenhum',
+            updated_at: group.last_updated,
+            formatted_date: formatDate(group.last_updated),
+          });
+        }
+        return result;
+      }
+
+      case 'low_stock': {
+        const result: any[] = [];
+        for (const item of rawInventory) {
+          if (selectedBranchId !== 'all' && item.branch_id !== selectedBranchId) continue;
+
+          const sku = skusMap.get(item.sku_id);
+          const branch = branchesMap.get(item.branch_id);
+          if (!sku || !branch) continue;
+
+          const family = familiesMap.get(sku.family_id);
+          const minStock = family?.min_stock_per_sku || 0;
+
+          // Only alert when stock goes below minimum
+          if (item.quantity >= minStock) continue;
+
+          const updateDate = parseFirestoreDate(item.updated_at);
+          if (!isDateInRange(updateDate, startDate, endDate)) continue;
+
+          result.push({
+            id: item.id,
+            branch_id: item.branch_id,
+            branch_name: branch.name,
+            sku_code: sku.sku_code,
+            manufacturer: family?.manufacturer || 'N/A',
+            line: family?.line || 'N/A',
+            spherical: sku.spherical,
+            cylindrical: sku.cylindrical,
+            quantity: item.quantity,
+            min_stock: minStock,
+            deficit: minStock - item.quantity,
+            updated_at: updateDate,
+            formatted_date: formatDate(updateDate),
+          });
+        }
+        return result;
+      }
+
+      case 'out_of_stock': {
+        // Find SKUs with exactly 0 stock or are entirely missing in selected branch(es)
+        const result: any[] = [];
+        const activeBranches = selectedBranchId === 'all' 
+          ? branches 
+          : branches.filter(b => b.id === selectedBranchId);
+
+        // Map existing inventories for fast lookup
+        const invMap = new Map<string, InventoryItem>();
+        for (const item of rawInventory) {
+          invMap.set(`${item.branch_id}_${item.sku_id}`, item);
+        }
+
+        for (const branch of activeBranches) {
+          for (const sku of skus) {
+            const item = invMap.get(`${branch.id}_${sku.id}`);
+            const qty = item ? item.quantity : 0;
+
+            if (qty === 0) {
+              const updateDate = item ? parseFirestoreDate(item.updated_at) : null;
+              if (!isDateInRange(updateDate, startDate, endDate)) continue;
+
+              const family = familiesMap.get(sku.family_id);
+
+              result.push({
+                id: `${branch.id}_${sku.id}`,
+                branch_name: branch.name,
+                sku_code: sku.sku_code,
+                manufacturer: family?.manufacturer || 'N/A',
+                line: family?.line || 'N/A',
+                spherical: sku.spherical,
+                cylindrical: sku.cylindrical,
+                quantity: 0,
+                updated_at: updateDate,
+                formatted_date: formatDate(updateDate),
+              });
+            }
+          }
+        }
+        return result;
+      }
+
+      case 'movements': {
+        const result: any[] = [];
+        for (const movement of rawMovements) {
+          if (selectedBranchId !== 'all' && movement.branch_id !== selectedBranchId) continue;
+
+          const createdDate = parseFirestoreDate(movement.created_at);
+          if (!isDateInRange(createdDate, startDate, endDate)) continue;
+
+          const sku = skusMap.get(movement.sku_id);
+          const branch = branchesMap.get(movement.branch_id);
+          if (!sku || !branch) continue;
+
+          const family = familiesMap.get(sku.family_id);
+
+          result.push({
+            id: movement.id,
+            branch_name: branch.name,
+            sku_code: sku.sku_code,
+            manufacturer: family?.manufacturer || 'N/A',
+            line: family?.line || 'N/A',
+            type: movement.type,
+            quantity: movement.quantity,
+            reason: movement.reason || 'N/A',
+            user_id: movement.user_id || 'N/A',
+            created_at: createdDate,
+            formatted_date: formatDate(createdDate)
+          });
+        }
+        // Ordered newest first by default
+        return result.sort((a, b) => {
+          const tA = a.created_at?.getTime() || 0;
+          const tB = b.created_at?.getTime() || 0;
+          return tB - tA;
+        });
+      }
+
+      case 'financial_valuation': {
+        const result: any[] = [];
+        for (const item of rawInventory) {
+          if (selectedBranchId !== 'all' && item.branch_id !== selectedBranchId) continue;
+
+          const sku = skusMap.get(item.sku_id);
+          const branch = branchesMap.get(item.branch_id);
+          if (!sku || !branch) continue;
+
+          const family = familiesMap.get(sku.family_id);
+          const updateDate = parseFirestoreDate(item.updated_at);
+
+          if (!isDateInRange(updateDate, startDate, endDate)) continue;
+
+          const unitCost = family?.cost_price || 0;
+          const totalValuation = item.quantity * unitCost;
+
+          result.push({
+            id: item.id,
+            branch_id: item.branch_id,
+            branch_name: branch.name,
+            sku_code: sku.sku_code,
+            manufacturer: family?.manufacturer || 'N/A',
+            line: family?.line || 'N/A',
+            spherical: sku.spherical,
+            cylindrical: sku.cylindrical,
+            quantity: item.quantity,
+            unit_cost: unitCost,
+            total_valuation: totalValuation,
+            updated_at: updateDate,
+            formatted_date: formatDate(updateDate),
+          });
+        }
+        return result;
+      }
+
+      default:
+        return [];
+    }
+  }, [loading, selectedReportId, selectedBranchId, startDate, endDate, rawInventory, rawMovements, skusMap, familiesMap, branchesMap]);
+
+  // Dynamic filter by text query inside computed selection
+  const filteredPreviewData = React.useMemo(() => {
+    const s = searchQuery.toLowerCase().trim();
+    if (!s) return computedDataAll;
+
+    return computedDataAll.filter(row => {
+      return (
+        String(row.sku_code || '').toLowerCase().includes(s) ||
+        String(row.manufacturer || '').toLowerCase().includes(s) ||
+        String(row.line || '').toLowerCase().includes(s) ||
+        String(row.branch_name || '').toLowerCase().includes(s) ||
+        String(row.reason || '').toLowerCase().includes(s) ||
+        String(row.type || '').toLowerCase().includes(s)
+      );
+    });
+  }, [computedDataAll, searchQuery]);
+
+  // Compute stats based on the ACTIVE dataset (after text query)
+  const stats = React.useMemo(() => {
+    const totalLines = filteredPreviewData.length;
+    let totalQuantity = 0;
+    let totalValue = 0;
+    let totalDeficit = 0;
+
+    for (const item of filteredPreviewData) {
+      totalQuantity += item.quantity || item.total_quantity || 0;
+      if (item.total_valuation) {
+        totalValue += item.total_valuation;
+      }
+      if (item.deficit) {
+        totalDeficit += item.deficit;
+      }
+    }
+
+    return {
+      totalLines,
+      totalQuantity,
+      totalValue,
+      totalDeficit
+    };
+  }, [filteredPreviewData]);
+
+  // Translate movement types
+  const translateMovType = (type: string) => {
+    switch (type) {
+      case 'entry': return { label: 'Entrada 🟢', color: 'bg-emerald-50 text-emerald-700 border-emerald-100' };
+      case 'exit': return { label: 'Saída 🔴', color: 'bg-rose-50 text-rose-700 border-rose-100' };
+      case 'writeoff': return { label: 'Baixa ⚠️', color: 'bg-amber-50 text-amber-700 border-amber-200' };
+      case 'transfer_out': return { label: 'Despacho Transferência ➡️', color: 'bg-blue-50 text-blue-700 border-blue-100' };
+      case 'transfer_in': return { label: 'Efetivado Transferência ⬅️', color: 'bg-teal-50 text-teal-700 border-teal-100' };
+      default: return { label: type, color: 'bg-slate-50 text-slate-700 border-slate-100' };
+    }
+  };
+
+  const getExportFilename = () => {
+    const activeType = reportTypes.find(r => r.id === selectedReportId);
+    const label = activeType ? activeType.title.toLowerCase().replace(/ /g, '_') : 'relatorio';
+    const cleanDateStr = new Date().toISOString().split('T')[0];
+    return `${label}_${cleanDateStr}`;
+  };
+
+  // EXPORT 1: EXCEL
+  const exportToExcel = () => {
+    if (filteredPreviewData.length === 0) {
+      alert("Nenhum dado disponível para exportação com os filtros vigentes.");
+      return;
+    }
+
+    let rows: any[] = [];
+    const activeType = reportTypes.find(r => r.id === selectedReportId)?.title || 'Relatório';
+
+    if (selectedReportId === 'inventory_current') {
+      rows = filteredPreviewData.map(r => ({
+        'Filial': r.branch_name,
+        'Fabricante': r.manufacturer,
+        'Linha': r.line,
+        'SKU': r.sku_code,
+        'Esférico (SPH)': formatRefraction(r.spherical),
+        'Cilíndrico (CYL)': formatCylinder(r.cylindrical),
+        'Estoque Atual': r.quantity,
+        'Última Atualização': r.formatted_date
+      }));
+    } else if (selectedReportId === 'inventory_consolidated') {
+      rows = filteredPreviewData.map(r => ({
+        'SKU': r.sku_code,
+        'Fabricante': r.manufacturer,
+        'Linha': r.line,
+        'Esférico (SPH)': formatRefraction(r.spherical),
+        'Cilíndrico (CYL)': formatCylinder(r.cylindrical),
+        'Estoque Consolidado': r.total_quantity,
+        'Lojas Atendidas': r.branches_count,
+        'Filiais com Estoque': r.branches_stocked
+      }));
+    } else if (selectedReportId === 'low_stock') {
+      rows = filteredPreviewData.map(r => ({
+        'Filial': r.branch_name,
+        'SKU': r.sku_code,
+        'Fabricante': r.manufacturer,
+        'Linha': r.line,
+        'Esférico (SPH)': formatRefraction(r.spherical),
+        'Cilíndrico (CYL)': formatCylinder(r.cylindrical),
+        'Estoque Atual': r.quantity,
+        'Estoque Mínimo': r.min_stock,
+        'Déficit': r.deficit
+      }));
+    } else if (selectedReportId === 'out_of_stock') {
+      rows = filteredPreviewData.map(r => ({
+        'Filial': r.branch_name,
+        'SKU': r.sku_code,
+        'Fabricante': r.manufacturer,
+        'Linha': r.line,
+        'Esférico (SPH)': formatRefraction(r.spherical),
+        'Cilíndrico (CYL)': formatCylinder(r.cylindrical),
+        'Estoque': r.quantity,
+        'Última Modificação': r.formatted_date
+      }));
+    } else if (selectedReportId === 'movements') {
+      rows = filteredPreviewData.map(r => ({
+        'Data e Hora': r.formatted_date,
+        'Filial': r.branch_name,
+        'Tipo': translateMovType(r.type).label,
+        'Quantidade': r.quantity,
+        'SKU': r.sku_code,
+        'Fabricante': r.manufacturer,
+        'Linha': r.line,
+        'Motivo / Observação': r.reason
+      }));
+    } else if (selectedReportId === 'financial_valuation') {
+      rows = filteredPreviewData.map(r => ({
+        'Filial': r.branch_name,
+        'SKU': r.sku_code,
+        'Fabricante': r.manufacturer,
+        'Linha': r.line,
+        'Quantidade': r.quantity,
+        'Preço de Custo (Un)': formatCurrency(r.unit_cost),
+        'Valor Total do Estoque': formatCurrency(r.total_valuation),
+        'Última Atualização': r.formatted_date
+      }));
+    }
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, activeType.substring(0, 30));
+    XLSX.writeFile(wb, `${getExportFilename()}.xlsx`);
+  };
+
+  // EXPORT 2: CSV
+  const exportToCSV = () => {
+    if (filteredPreviewData.length === 0) {
+      alert("Nenhum dado disponível para exportação com os filtros vigentes.");
+      return;
+    }
+
+    let rows: any[] = [];
+
+    if (selectedReportId === 'inventory_current') {
+      rows = filteredPreviewData.map(r => ({
+        'Filial': r.branch_name,
+        'Fabricante': r.manufacturer,
+        'Linha': r.line,
+        'SKU': r.sku_code,
+        'Esferico': formatRefraction(r.spherical),
+        'Cilindrico': formatCylinder(r.cylindrical),
+        'Estoque_Atual': r.quantity,
+        'Ultima_Atualizacao': r.formatted_date
+      }));
+    } else if (selectedReportId === 'inventory_consolidated') {
+      rows = filteredPreviewData.map(r => ({
+        'SKU': r.sku_code,
+        'Fabricante': r.manufacturer,
+        'Linha': r.line,
+        'Esferico': formatRefraction(r.spherical),
+        'Cilindrico': formatCylinder(r.cylindrical),
+        'Estoque_Consolidado': r.total_quantity,
+        'Lojas_Atendidas_Contagem': r.branches_count,
+        'Filiais_Com_Estoque': r.branches_stocked
+      }));
+    } else if (selectedReportId === 'low_stock') {
+      rows = filteredPreviewData.map(r => ({
+        'Filial': r.branch_name,
+        'SKU': r.sku_code,
+        'Fabricante': r.manufacturer,
+        'Linha': r.line,
+        'Esferico': formatRefraction(r.spherical),
+        'Cilindrico': formatCylinder(r.cylindrical),
+        'Estoque_Atual': r.quantity,
+        'Estoque_Minimo': r.min_stock,
+        'Deficit': r.deficit
+      }));
+    } else if (selectedReportId === 'out_of_stock') {
+      rows = filteredPreviewData.map(r => ({
+        'Filial': r.branch_name,
+        'SKU': r.sku_code,
+        'Fabricante': r.manufacturer,
+        'Linha': r.line,
+        'Esferico': formatRefraction(r.spherical),
+        'Cilindrico': formatCylinder(r.cylindrical),
+        'Estoque': r.quantity,
+        'Ultima_Modificacao': r.formatted_date
+      }));
+    } else if (selectedReportId === 'movements') {
+      rows = filteredPreviewData.map(r => ({
+        'Data_Hora': r.formatted_date,
+        'Filial': r.branch_name,
+        'Tipo': translateMovType(r.type).label,
+        'Quantidade': r.quantity,
+        'SKU': r.sku_code,
+        'Fabricante': r.manufacturer,
+        'Linha': r.line,
+        'Motivo_Observacao': r.reason
+      }));
+    } else if (selectedReportId === 'financial_valuation') {
+      rows = filteredPreviewData.map(r => ({
+        'Filial': r.branch_name,
+        'SKU': r.sku_code,
+        'Fabricante': r.manufacturer,
+        'Linha': r.line,
+        'Quantidade': r.quantity,
+        'Custo_Unitario': formatCurrency(r.unit_cost),
+        'Valor_Total_Estoque': formatCurrency(r.total_valuation),
+        'Ultima_Atualizacao': r.formatted_date
+      }));
+    }
+
+    const headers = Object.keys(rows[0] || {});
+    // Direct Portuguese Excel friendly formatting with ";" separator & BOM
+    const csvRows = [
+      headers.join(';'),
+      ...rows.map(row => 
+        headers.map(header => {
+          const val = row[header];
+          if (val === null || val === undefined) return '';
+          const escaped = String(val).replace(/"/g, '""');
+          return `"${escaped}"`;
+        }).join(';')
+      )
+    ];
+
+    const csvContent = csvRows.join("\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${getExportFilename()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // EXPORT 3: PREMIUM A4 PDF
+  const exportToPDF = () => {
+    if (filteredPreviewData.length === 0) {
+      alert("Nenhum dado disponível para exportação com os filtros vigentes.");
+      return;
+    }
+
+    const docPDF = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const activeReport = reportTypes.find(r => r.id === selectedReportId);
+    const title = activeReport ? activeReport.title : 'Relatório';
+
+    // Header styling
+    docPDF.setFont('helvetica', 'bold');
+    docPDF.setFontSize(20);
+    docPDF.setTextColor(15, 118, 110); // Brand teal
+    docPDF.text("REIS CONTROLE LENS 👓", 14, 15);
+
+    docPDF.setFontSize(12);
+    docPDF.setTextColor(51, 65, 85); // Slate slate-700
+    docPDF.text(`Relatório Avançado: ${title}`, 14, 21);
+
+    // Meta filters
+    docPDF.setFont('helvetica', 'normal');
+    docPDF.setFontSize(9);
+    docPDF.setTextColor(100, 116, 139); // Slate-400
+    const branchLabel = selectedBranchId === 'all' ? 'Todas' : (branchesMap.get(selectedBranchId)?.name || 'Específica');
+    const periodLabel = (startDate || endDate) 
+      ? `Filtrado de ${startDate ? formatDate(new Date(startDate + 'T00:00:00'))?.split(' ')[0] : 'Início'} até ${endDate ? formatDate(new Date(endDate + 'T23:59:59'))?.split(' ')[0] : 'Fim'}`
+      : 'Todos os registros';
+    docPDF.text(`Filial Selecionada: ${branchLabel}  |  Período: ${periodLabel}`, 14, 27);
+    docPDF.text(`Gerado em: ${new Date().toLocaleString()}`, 14, 32);
+
+    let head: string[][] = [];
+    let body: any[][] = [];
+
+    if (selectedReportId === 'inventory_current') {
+      head = [['Filial', 'Fabricante', 'Modelo / Linha', 'SKU', 'Esf (SPH)', 'Cil (CYL)', 'Qtd Físico', 'Atualizado em']];
+      body = filteredPreviewData.map(r => [
+        r.branch_name,
+        r.manufacturer,
+        r.line,
+        r.sku_code,
+        formatRefraction(r.spherical),
+        formatCylinder(r.cylindrical),
+        String(r.quantity),
+        r.formatted_date
+      ]);
+    } else if (selectedReportId === 'inventory_consolidated') {
+      head = [['Código SKU', 'Fabricante', 'Modelo / Linha', 'Esf (SPH)', 'Cil (CYL)', 'Estoque Consolidado', 'Lojas', 'Filiais com Estoque']];
+      body = filteredPreviewData.map(r => [
+        r.sku_code,
+        r.manufacturer,
+        r.line,
+        formatRefraction(r.spherical),
+        formatCylinder(r.cylindrical),
+        String(r.total_quantity),
+        String(r.branches_count),
+        r.branches_stocked
+      ]);
+    } else if (selectedReportId === 'low_stock') {
+      head = [['Filial', 'Código SKU', 'Fabricante', 'Modelo / Linha', 'Atual', 'Mínimo', 'Déficit (Reposição)']];
+      body = filteredPreviewData.map(r => [
+        r.branch_name,
+        r.sku_code,
+        r.manufacturer,
+        r.line,
+        String(r.quantity),
+        String(r.min_stock),
+        String(r.deficit)
+      ]);
+    } else if (selectedReportId === 'out_of_stock') {
+      head = [['Filial', 'Código SKU', 'Fabricante', 'Modelo / Linha', 'Esf (SPH)', 'Cil (CYL)', 'Estoque', 'Última Modificação']];
+      body = filteredPreviewData.map(r => [
+        r.branch_name,
+        r.sku_code,
+        r.manufacturer,
+        r.line,
+        formatRefraction(r.spherical),
+        formatCylinder(r.cylindrical),
+        '0',
+        r.formatted_date
+      ]);
+    } else if (selectedReportId === 'movements') {
+      head = [['Data e Hora', 'Filial', 'Operação', 'Qtd', 'SKU', 'Fabricante', 'Linha', 'Motivo']];
+      body = filteredPreviewData.map(r => [
+        r.formatted_date,
+        r.branch_name,
+        translateMovType(r.type).label,
+        String(r.quantity),
+        r.sku_code,
+        r.manufacturer,
+        r.line,
+        r.reason
+      ]);
+    } else if (selectedReportId === 'financial_valuation') {
+      head = [['Filial', 'Código SKU', 'Fabricante', 'Modelo / Linha', 'Esf (SPH)', 'Cil (CYL)', 'Quantidade', 'Custo Un.', 'Total em Estoque']];
+      body = filteredPreviewData.map(r => [
+        r.branch_name,
+        r.sku_code,
+        r.manufacturer,
+        r.line,
+        formatRefraction(r.spherical),
+        formatCylinder(r.cylindrical),
+        String(r.quantity),
+        formatCurrency(r.unit_cost),
+        formatCurrency(r.total_valuation)
+      ]);
+    }
+
+    // Embed AutoTable with high premium theme colors
+    autoTable(docPDF, {
+      startY: 37,
+      head: head,
+      body: body,
+      theme: 'striped',
+      headStyles: {
+        fillColor: [13, 148, 136], // primary-600 (teal)
+        textColor: 255,
+        fontSize: 9,
+        fontStyle: 'bold'
+      },
+      bodyStyles: {
+        fontSize: 8.5,
+        textColor: [51, 65, 85]
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252] // slate-50
+      },
+      margin: { left: 14, right: 14 },
+      didDrawPage: (data) => {
+        // Footer: Page indicators
+        const str = `Página ${data.pageNumber}`;
+        docPDF.setFontSize(8);
+        docPDF.setTextColor(148, 163, 184); // slate-400
+        docPDF.text(str, docPDF.internal.pageSize.width - 25, docPDF.internal.pageSize.height - 10);
+        docPDF.text("Reis Controle Lens Inteligente - Módulo de Relatórios Consolidados", 14, docPDF.internal.pageSize.height - 10);
+      }
+    });
+
+    docPDF.save(`${getExportFilename()}.pdf`);
+  };
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Relatórios e Exportações</h1>
-        <p className="text-slate-400 mt-1">Gere documentos detalhados sobre a operação da sua rede.</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {reportTypes.map((report) => (
-          <motion.div 
-            key={report.id}
-            whileHover={{ y: -5 }}
-            className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between"
-          >
-            <div className="flex items-start space-x-4">
-              <div className={`p-4 rounded-2xl shrink-0 ${report.color} bg-opacity-10 text-${report.color.replace('bg-', '')}`}>
-                <report.icon size={28} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-lg font-bold text-slate-800 truncate">{report.title}</h3>
-                <p className="text-sm text-slate-400 mt-1 leading-relaxed line-clamp-2">{report.desc}</p>
-              </div>
-            </div>
-
-            <div className="mt-8 flex flex-col gap-2">
-              <div className="flex items-center space-x-3">
-                <button 
-                  onClick={() => handleGenerateReport(report.id, 'pdf')}
-                  disabled={loading}
-                  className="flex-1 flex items-center justify-center px-4 py-2.5 bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 rounded-xl text-xs font-bold transition-all border border-transparent hover:border-red-100 disabled:opacity-50"
-                >
-                  {loading ? <Loader2 size={14} className="animate-spin mr-2" /> : <Download size={14} className="mr-2" />} PDF
-                </button>
-                <button 
-                  onClick={() => handleGenerateReport(report.id, 'excel')}
-                  disabled={loading}
-                  className="flex-1 flex items-center justify-center px-4 py-2.5 bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 rounded-xl text-xs font-bold transition-all border border-transparent hover:border-emerald-100 disabled:opacity-50"
-                >
-                  {loading ? <Loader2 size={14} className="animate-spin mr-2" /> : <FileSpreadsheet size={14} className="mr-2" />} EXCEL
-                </button>
-              </div>
-
-              {report.id === 'interbranch_replenishments' && (
-                <button
-                  onClick={() => handleLoadSimulator()}
-                  disabled={simLoading}
-                  className="mt-1 w-full flex items-center justify-center px-4 py-2.5 bg-brand-teal text-white hover:bg-brand-teal/90 rounded-xl text-xs font-black transition-all border border-transparent shadow-md shadow-brand-teal/10"
-                >
-                  {simLoading ? <Loader2 size={14} className="animate-spin mr-2" /> : <Truck size={14} className="mr-2" />} SIMULAR NO PAINEL
-                </button>
-              )}
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Simulator Panel Section */}
-      {showSimulator && (
-        <motion.div 
-          id="interbranch-simulator-panel"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-3xl p-6 shadow-md border border-slate-100 space-y-6"
+    <div className="space-y-8 max-w-7xl mx-auto">
+      {/* Title block */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
+            Relatórios e Auditoria Avançada 📊
+          </h1>
+          <p className="text-slate-400 mt-1 font-semibold text-sm">
+            Gere, analise e exporte informações essenciais de estoque, finanças e movimentações de sua rede de óticas.
+          </p>
+        </div>
+        <button 
+          onClick={() => loadData(true)} 
+          disabled={loading}
+          className="self-start md:self-center inline-flex items-center space-x-2 px-4.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl transition-all border border-slate-200 hover:border-slate-300 shadow-sm disabled:opacity-50 cursor-pointer"
         >
-          <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+          <RefreshCw size={14} className={cn("text-slate-500", loading && "animate-spin")} />
+          <span>Sincronizar Banco</span>
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-slate-100 shadow-xs">
+          <Loader2 size={40} className="text-brand-teal animate-spin mb-4" />
+          <h3 className="text-slate-700 font-extrabold text-base">Processando relatórios...</h3>
+          <p className="text-slate-400 text-xs mt-1">Carregando grades de todas as filiais.</p>
+        </div>
+      ) : (
+        <>
+          {/* Universal Filters Controller Card */}
+          <div className="bg-white rounded-3xl p-6 shadow-xs border border-slate-100 grid grid-cols-1 md:grid-cols-4 gap-5">
             <div>
-              <div className="flex items-center gap-2">
-                <span className="p-2 bg-teal-50 text-brand-teal rounded-lg">
-                  <Truck size={20} />
-                </span>
-                <h2 className="text-xl font-black text-slate-800 tracking-tight">
-                  Simulador de Ressuprimento Inteligente Inter-Filiais
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                <Building2 size={13} className="text-slate-400" />
+                Filial Selecionada
+              </label>
+              <select
+                value={selectedBranchId}
+                onChange={(e) => setSelectedBranchId(e.target.value)}
+                className="w-full bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-xl px-3 py-2.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal text-xs font-bold transition-all cursor-pointer"
+              >
+                <option value="all">🌐 Todas as Filiais (Rede Consolidada)</option>
+                {branches.map(b => (
+                  <option key={b.id} value={b.id}>🏪 {b.name} ({b.code})</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                <Calendar size={13} className="text-slate-400" />
+                Data Inicial
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal text-xs font-bold transition-all cursor-pointer"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                <Calendar size={13} className="text-slate-400" />
+                Data Final
+              </label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal text-xs font-bold transition-all cursor-pointer"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                <Search size={13} className="text-slate-400" />
+                Busca Rápida na Prévia
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Ex: Hoya, SKU-102, Miyosmart..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-brand-teal placeholder-slate-400/80"
+                />
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              </div>
+            </div>
+          </div>
+
+          {/* Report Choice Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {reportTypes.map((report) => {
+              const Icon = report.icon;
+              const isSelected = selectedReportId === report.id;
+              return (
+                <button
+                  key={report.id}
+                  onClick={() => {
+                    setSelectedReportId(report.id);
+                  }}
+                  className={cn(
+                    "relative p-6 text-left rounded-3xl border transition-all cursor-pointer flex flex-col justify-between h-48",
+                    isSelected 
+                      ? "bg-white border-brand-teal ring-2 ring-teal-500/10 shadow-md" 
+                      : "bg-white border-slate-200/60 hover:border-slate-300 hover:shadow-xs"
+                  )}
+                >
+                  <div className="flex items-start justify-between w-full">
+                    <div className={cn("p-3.5 rounded-2xl border shrink-0", report.color)}>
+                      <Icon size={22} />
+                    </div>
+                    {isSelected && (
+                      <span className="text-[9px] font-black tracking-widest text-brand-teal bg-teal-50 px-2 py-0.5 rounded-md border border-teal-100 uppercase animate-pulse">
+                        Visível
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-800 tracking-tight leading-tight mb-1">{report.title}</h3>
+                    <p className="text-[11px] text-slate-400 leading-normal line-clamp-2 font-medium">{report.desc}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Interactive Preview Panel */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-xs space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="p-1 px-2.5 text-[9px] font-black uppercase tracking-widest bg-brand-teal text-white rounded">
+                    Pré-visualização Interativa
+                  </span>
+                  <span className="text-xs font-bold text-slate-400">
+                    Abaixo você vê exatamente o que será exportado
+                  </span>
+                </div>
+                <h2 className="text-lg font-black text-slate-800 mt-1">
+                  {reportTypes.find(r => r.id === selectedReportId)?.title}
                 </h2>
               </div>
-              <p className="text-xs text-slate-400 mt-1 max-w-2xl">
-                Sugestões automatizadas de transferência de produtos excedentes para abastecer lojas com estoque abaixo do mínimo ou em ruptura total.
-              </p>
-            </div>
-            <button 
-              onClick={() => setShowSimulator(false)}
-              className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all cursor-pointer shrink-0"
-              title="Fechar Simulador"
-            >
-              <X size={20} />
-            </button>
-          </div>
 
-          {/* KPI Dashboard */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-slate-50/70 p-4 rounded-2xl border border-slate-100/50">
-              <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Total de Oportunidades</span>
-              <span className="text-2xl font-black text-slate-800 mt-1 block">
-                {filteredSimData.length}
-              </span>
-              <span className="text-[10px] text-slate-400 block mt-0.5">Rotas de transferências sugeridas</span>
-            </div>
-            <div className="bg-emerald-50/10 p-4 rounded-2xl border border-emerald-100/30">
-              <span className="text-[10px] font-bold text-emerald-600 block uppercase tracking-wider">Lentes a Transferir</span>
-              <span className="text-2xl font-black text-emerald-700 mt-1 block">
-                {filteredSimData.reduce((acc, curr) => acc + curr.transfer_qty, 0)} un
-              </span>
-              <span className="text-[10px] text-emerald-600/80 block mt-0.5">Giro estratégico de excedentes</span>
-            </div>
-            <div className="bg-rose-50/40 p-4 rounded-2xl border border-rose-100/30">
-              <span className="text-[10px] font-bold text-rose-600 block uppercase tracking-wider">Rupturas Críticas Evitadas</span>
-              <span className="text-2xl font-black text-rose-700 mt-1 block">
-                {filteredSimData.filter(d => d.is_absolute_rupture).length}
-              </span>
-              <span className="text-[10px] text-rose-600/80 block mt-0.5">Produtos zerados que receberão abastecimento</span>
-            </div>
-          </div>
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-2.5 self-start sm:self-center">
+                <button
+                  onClick={exportToPDF}
+                  disabled={filteredPreviewData.length === 0}
+                  className="inline-flex items-center space-x-2 px-3.5 py-2 bg-slate-50 hover:bg-red-50 text-slate-700 hover:text-red-650 font-bold text-xs rounded-xl transition-all border border-slate-200 hover:border-red-100 disabled:opacity-40 disabled:hover:text-slate-700 disabled:hover:bg-slate-50 cursor-pointer"
+                >
+                  <FileDown size={14} className="text-red-500" />
+                  <span>PDF de Alta Qualidade</span>
+                </button>
 
-          {/* Filters Bar */}
-          <div className="flex flex-col sm:flex-row items-center gap-4 justify-between bg-slate-50/40 p-3 rounded-2xl border border-slate-100/50">
-            {/* Search Input */}
-            <div className="relative w-full sm:w-80">
-              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input 
-                type="text"
-                placeholder="Buscar por SKU ou Filial..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 bg-white rounded-xl border border-slate-200 text-xs font-semibold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-teal focus:border-transparent transition-all"
-              />
+                <button
+                  onClick={exportToExcel}
+                  disabled={filteredPreviewData.length === 0}
+                  className="inline-flex items-center space-x-2 px-3.5 py-2 bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 font-bold text-xs rounded-xl transition-all border border-slate-200 hover:border-emerald-100 disabled:opacity-40 disabled:hover:text-slate-700 disabled:hover:bg-slate-50 cursor-pointer"
+                >
+                  <FileSpreadsheet size={14} className="text-emerald-600" />
+                  <span>Excel Corporativo</span>
+                </button>
+
+                <button
+                  onClick={exportToCSV}
+                  disabled={filteredPreviewData.length === 0}
+                  className="inline-flex items-center space-x-2 px-3.5 py-2 bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-650 font-bold text-xs rounded-xl transition-all border border-slate-200 hover:border-blue-100 disabled:opacity-40 disabled:hover:text-slate-700 disabled:hover:bg-slate-50 cursor-pointer"
+                >
+                  <FileText size={14} className="text-blue-500" />
+                  <span>Planilha CSV (Separador Semicólon)</span>
+                </button>
+              </div>
             </div>
 
-            {/* Ruptures Only Filter */}
-            <label className="flex items-center gap-2 cursor-pointer select-none py-1 px-3 bg-white rounded-xl border border-slate-200 hover:border-brand-teal/50 transition-all w-full sm:w-auto">
-              <input 
-                type="checkbox"
-                checked={filterRupturesOnly}
-                onChange={(e) => setFilterRupturesOnly(e.target.checked)}
-                className="rounded border-slate-300 text-brand-teal focus:ring-brand-teal text-xs w-4 h-4 cursor-pointer"
-              />
-              <span className="text-xs font-bold text-slate-600">Apenas Destino em Ruptura Total (Estoque 0)</span>
-            </label>
-          </div>
+            {/* Smart Micro KPI Cards Block */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="p-4 bg-slate-50/60 rounded-2xl border border-slate-100">
+                <span className="text-[9px] font-black text-slate-400 block uppercase tracking-widest mb-1">Registros Listados</span>
+                <span className="text-xl font-extrabold text-slate-800">{stats.totalLines}</span>
+                <span className="text-[10px] text-slate-400 block mt-0.5 font-medium">Linhas encontradas</span>
+              </div>
 
-          {/* Table */}
-          {filteredSimData.length === 0 ? (
-            <div className="text-center py-12 bg-slate-50/30 rounded-2xl border border-dashed border-slate-200">
-              <CheckCircle2 size={40} className="text-emerald-500 mx-auto mb-3" />
-              <h3 className="text-sm font-bold text-slate-700">Tudo Balanceado!</h3>
-              <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
-                Não foram encontradas rotas de ressuprimento correspondentes aos critérios de filtro.
-              </p>
+              {(selectedReportId === 'inventory_current' || selectedReportId === 'inventory_consolidated' || selectedReportId === 'low_stock' || selectedReportId === 'financial_valuation') && (
+                <div className="p-4 bg-slate-50/60 rounded-2xl border border-slate-100">
+                  <span className="text-[9px] font-black text-slate-400 block uppercase tracking-widest mb-1">Grade Física (Total Lentes)</span>
+                  <span className="text-xl font-extrabold text-slate-800">{stats.totalQuantity} un</span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5 font-medium">Total de unidades</span>
+                </div>
+              )}
+
+              {selectedReportId === 'low_stock' && (
+                <div className="p-4 bg-amber-50/30 rounded-2xl border border-amber-100">
+                  <span className="text-[9px] font-black text-amber-600 block uppercase tracking-widest mb-1">Déficit de Reposição</span>
+                  <span className="text-xl font-extrabold text-amber-700">{stats.totalDeficit} un</span>
+                  <span className="text-[10px] text-amber-500 block mt-0.5 font-medium">Para atingir estoque mínimo</span>
+                </div>
+              )}
+
+              {selectedReportId === 'financial_valuation' && (
+                <>
+                  <div className="p-4 bg-emerald-50/30 rounded-2xl border border-emerald-100">
+                    <span className="text-[9px] font-black text-emerald-600 block uppercase tracking-widest mb-1">Capital Total Investido</span>
+                    <span className="text-xl font-extrabold text-emerald-700">{formatCurrency(stats.totalValue)}</span>
+                    <span className="text-[10px] text-emerald-600 block mt-0.5 font-medium">Preço de custo</span>
+                  </div>
+                  <div className="p-4 bg-slate-50/60 rounded-2xl border border-slate-100">
+                    <span className="text-[9px] font-black text-slate-400 block uppercase tracking-widest mb-1">Custo Médio da Unidade</span>
+                    <span className="text-xl font-extrabold text-slate-800">
+                      {stats.totalQuantity > 0 ? formatCurrency(stats.totalValue / stats.totalQuantity) : 'R$ 0,00'}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5 font-medium">Total valor / unidades</span>
+                  </div>
+                </>
+              )}
+
+              {selectedReportId === 'movements' && (
+                <div className="p-4 bg-emerald-50/30 rounded-2xl border border-emerald-100">
+                  <span className="text-[9px] font-black text-emerald-600 block uppercase tracking-widest mb-1">Volume de Lances</span>
+                  <span className="text-xl font-extrabold text-emerald-700">
+                    {filteredPreviewData.reduce((acc, curr) => acc + (curr.quantity || 0), 0)} un
+                  </span>
+                  <span className="text-[10px] text-emerald-600 block mt-0.5 font-medium">Total em circulação</span>
+                </div>
+              )}
+
+              {selectedReportId === 'out_of_stock' && (
+                <div className="p-4 bg-rose-50/30 rounded-2xl border border-rose-100">
+                  <span className="text-[9px] font-black text-rose-600 block uppercase tracking-widest mb-1">Alertas de Ruptura</span>
+                  <span className="text-xl font-extrabold text-rose-700">{filteredPreviewData.length} itens</span>
+                  <span className="text-[10px] text-rose-500 block mt-0.5 font-medium">Produtos com saldo zerado</span>
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="overflow-x-auto rounded-2xl border border-slate-100">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50/70 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                    <th className="py-3 px-4">Lente / SKU</th>
-                    <th className="py-3 px-4">Fabricante / Linha</th>
-                    <th className="py-3 px-4">Filial de Origem (Excedente)</th>
-                    <th className="py-3 px-4 text-center">Transferência</th>
-                    <th className="py-3 px-4">Filial de Destino (Necessitada)</th>
-                    <th className="py-3 px-4 text-right">Ação Recomendada</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredSimData.map((item, index) => (
-                    <tr key={index} className="hover:bg-slate-50/50 transition-all text-xs">
-                      <td className="py-4 px-4">
-                        <span className="font-mono font-black text-slate-800 bg-slate-100 px-2.5 py-1 rounded-md">
-                          {item.sku_code}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 font-semibold text-slate-500">
-                        {item.manufacturer} • <span className="text-slate-700 text-xs font-bold">{item.line}</span>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex flex-col">
-                          <span className="font-bold text-slate-700">{item.origin_branch_name}</span>
-                          <span className="text-[10px] text-slate-400">
-                            Estoque Atual: <strong className="text-slate-600">{item.origin_stock}</strong> (Mín: {item.min_stock})
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4 text-center">
-                        <div className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 font-extrabold px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm">
-                          <ArrowLeftRight size={12} />
-                          <span>{item.transfer_qty} un</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex flex-col">
-                          <span className="font-bold text-slate-700">{item.destination_branch_name}</span>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="text-[10px] text-slate-400">
-                              Estoque Atual: <strong className="text-slate-600">{item.destination_stock}</strong> (Mín: {item.min_stock})
-                            </span>
-                            {item.is_absolute_rupture ? (
-                              <span className="px-1.5 py-0.5 text-[9px] font-extrabold bg-rose-100 text-rose-600 rounded uppercase tracking-wider animate-pulse">
-                                Ruptura Total
-                              </span>
-                            ) : (
-                              <span className="px-1.5 py-0.5 text-[9px] font-extrabold bg-amber-100 text-amber-600 rounded uppercase tracking-wider">
-                                Crítico
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4 text-right">
-                        <span className="text-[10px] text-slate-400 italic block">
-                          Efetuar envio no menu "Transferências"
-                        </span>
-                      </td>
+
+            {/* Preview Data Grid table */}
+            <div className="overflow-x-auto rounded-2xl border border-slate-150">
+              {filteredPreviewData.length === 0 ? (
+                <div className="text-center py-20 bg-slate-50/40">
+                  <CheckCircle2 size={40} className="text-brand-teal/70 mx-auto mb-3" />
+                  <h3 className="text-sm font-extrabold text-slate-700">Nenhum dado encontrado</h3>
+                  <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                    Não existem registros correspondentes a esses critérios de filtragem de filial, datas ou termo de busca.
+                  </p>
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse table-auto">
+                  <thead>
+                    <tr className="bg-slate-50/70 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      {selectedReportId === 'inventory_current' && (
+                        <>
+                          <th className="py-3 px-4">Filial</th>
+                          <th className="py-3 px-4">Fabricante</th>
+                          <th className="py-3 px-4">Modelo / Linha</th>
+                          <th className="py-3 px-4">SKU</th>
+                          <th className="py-3 px-4">Esf (SPH)</th>
+                          <th className="py-3 px-4">Cil (CYL)</th>
+                          <th className="py-3 px-4 text-center">Qtd Atual</th>
+                          <th className="py-3 px-4 text-right">Última Modificação</th>
+                        </>
+                      )}
+                      {selectedReportId === 'inventory_consolidated' && (
+                        <>
+                          <th className="py-3 px-4">SKU</th>
+                          <th className="py-3 px-4">Fabricante</th>
+                          <th className="py-3 px-4">Modelo / Linha</th>
+                          <th className="py-3 px-4">Esf (SPH)</th>
+                          <th className="py-3 px-4">Cil (CYL)</th>
+                          <th className="py-3 px-4 text-center">Total em Rede</th>
+                          <th className="py-3 px-4 text-center">Num Lojas</th>
+                          <th className="py-3 px-4 text-right">Filiais Abastecidas</th>
+                        </>
+                      )}
+                      {selectedReportId === 'low_stock' && (
+                        <>
+                          <th className="py-3 px-4">Filial</th>
+                          <th className="py-3 px-4">SKU</th>
+                          <th className="py-3 px-4">Fabricante</th>
+                          <th className="py-3 px-4">Modelo / Linha</th>
+                          <th className="py-3 px-4 text-center">Estoque Atual</th>
+                          <th className="py-3 px-4 text-center">Estoque Mínimo</th>
+                          <th className="py-3 px-4 text-right text-rose-600">Qtd Faltante (Déficit)</th>
+                        </>
+                      )}
+                      {selectedReportId === 'out_of_stock' && (
+                        <>
+                          <th className="py-3 px-4">Filial</th>
+                          <th className="py-3 px-4">SKU</th>
+                          <th className="py-3 px-4">Fabricante</th>
+                          <th className="py-3 px-4">Modelo / Linha</th>
+                          <th className="py-3 px-4">Esf (SPH)</th>
+                          <th className="py-3 px-4">Cil (CYL)</th>
+                          <th className="py-3 px-4 text-center">Estoque</th>
+                          <th className="py-3 px-4 text-right">Última Modificação</th>
+                        </>
+                      )}
+                      {selectedReportId === 'movements' && (
+                        <>
+                          <th className="py-3 px-4">Data e Hora</th>
+                          <th className="py-3 px-4">Filial</th>
+                          <th className="py-3 px-4">Tipo</th>
+                          <th className="py-3 px-4 text-center">Qtd</th>
+                          <th className="py-3 px-4">SKU</th>
+                          <th className="py-3 px-4">Fabricante</th>
+                          <th className="py-3 px-4">Modelo / Linha</th>
+                          <th className="py-3 px-4 text-right">Motivo / Operador</th>
+                        </>
+                      )}
+                      {selectedReportId === 'financial_valuation' && (
+                        <>
+                          <th className="py-3 px-4">Filial</th>
+                          <th className="py-3 px-4">SKU</th>
+                          <th className="py-3 px-4">Fabricante</th>
+                          <th className="py-3 px-4">Modelo / Linha</th>
+                          <th className="py-3 px-4 text-center">Qtd</th>
+                          <th className="py-3 px-4 text-right">Custo Un. (Fabricante)</th>
+                          <th className="py-3 px-4 text-right">Total Financeiro</th>
+                          <th className="py-3 px-4 text-right">Última Atualização</th>
+                        </>
+                      )}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs text-slate-600 font-medium">
+                    {filteredPreviewData.map((row, index) => (
+                      <tr key={row.id || index} className="hover:bg-slate-50/50 transition-all font-semibold">
+                        {selectedReportId === 'inventory_current' && (
+                          <>
+                            <td className="py-3 px-4">{row.branch_name}</td>
+                            <td className="py-3 px-4 font-bold text-slate-800">{row.manufacturer}</td>
+                            <td className="py-3 px-4">{row.line}</td>
+                            <td className="py-3 px-4">
+                              <span className="font-mono bg-slate-100 text-[10px] text-slate-700 rounded px-1.5 py-0.5 border border-slate-200">
+                                {row.sku_code}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">{formatRefraction(row.spherical)}</td>
+                            <td className="py-3 px-4">{formatCylinder(row.cylindrical)}</td>
+                            <td className="py-3 px-4 text-center">
+                              <span className={cn(
+                                "px-2 py-0.5 rounded font-black",
+                                row.quantity === 0 ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-850"
+                              )}>
+                                {row.quantity}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right text-slate-400 text-[11px]">{row.formatted_date}</td>
+                          </>
+                        )}
+
+                        {selectedReportId === 'inventory_consolidated' && (
+                          <>
+                            <td className="py-3 px-4">
+                              <span className="font-mono bg-slate-100 text-[10px] text-slate-700 rounded px-1.5 py-0.5 border border-slate-200">
+                                {row.sku_code}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-bold text-slate-800">{row.manufacturer}</td>
+                            <td className="py-3 px-4">{row.line}</td>
+                            <td className="py-3 px-4">{formatRefraction(row.spherical)}</td>
+                            <td className="py-3 px-4">{formatCylinder(row.cylindrical)}</td>
+                            <td className="py-3 px-4 text-center">
+                              <span className="bg-blue-50 text-blue-700 font-extrabold px-2.5 py-1 rounded border border-blue-100">
+                                {row.total_quantity} un
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center font-bold">{row.branches_count}</td>
+                            <td className="py-3 px-4 text-right text-slate-400 truncate max-w-xs">{row.branches_stocked}</td>
+                          </>
+                        )}
+
+                        {selectedReportId === 'low_stock' && (
+                          <>
+                            <td className="py-3 px-4">{row.branch_name}</td>
+                            <td className="py-3 px-4">
+                              <span className="font-mono bg-slate-100 text-[10px] text-slate-700 rounded px-1.5 py-0.5 border border-slate-200">
+                                {row.sku_code}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-bold text-slate-800">{row.manufacturer}</td>
+                            <td className="py-3 px-4">{row.line}</td>
+                            <td className="py-3 px-4 text-center font-black text-rose-600 bg-rose-50/50">{row.quantity}</td>
+                            <td className="py-3 px-4 text-center font-bold text-slate-500">{row.min_stock}</td>
+                            <td className="py-3 px-4 text-right font-black text-rose-700">-{row.deficit} un</td>
+                          </>
+                        )}
+
+                        {selectedReportId === 'out_of_stock' && (
+                          <>
+                            <td className="py-3 px-4">{row.branch_name}</td>
+                            <td className="py-3 px-4">
+                              <span className="font-mono bg-rose-50 text-[10px] text-rose-700 rounded px-1.5 py-0.5 border border-rose-100 font-bold">
+                                {row.sku_code}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-bold text-slate-800">{row.manufacturer}</td>
+                            <td className="py-3 px-4">{row.line}</td>
+                            <td className="py-3 px-4">{formatRefraction(row.spherical)}</td>
+                            <td className="py-3 px-4">{formatCylinder(row.cylindrical)}</td>
+                            <td className="py-3 px-4 text-center">
+                              <span className="px-2 py-0.5 rounded font-black text-slate-300 bg-slate-100">
+                                ZERADO
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right text-slate-400 text-[11px]">{row.formatted_date}</td>
+                          </>
+                        )}
+
+                        {selectedReportId === 'movements' && { ...translateMovType(row.type) } && (
+                          <>
+                            <td className="py-3 px-4 text-[11px] text-slate-400">{row.formatted_date}</td>
+                            <td className="py-3 px-4">{row.branch_name}</td>
+                            <td className="py-3 px-4">
+                              <span className={cn(
+                                "px-2.5 py-0.5 rounded border text-[10px] font-bold inline-block",
+                                translateMovType(row.type).color
+                              )}>
+                                {translateMovType(row.type).label}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center font-black text-slate-800">{row.quantity}</td>
+                            <td className="py-3 px-4">
+                              <span className="font-mono bg-slate-100 text-[10px] text-slate-700 rounded px-1.5 py-0.5 border border-slate-250 font-bold">
+                                {row.sku_code}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-bold text-slate-750">{row.manufacturer}</td>
+                            <td className="py-3 px-4 text-slate-500">{row.line}</td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex flex-col">
+                                <span className="text-slate-700 truncate max-w-xxs" title={row.reason}>{row.reason}</span>
+                                {row.user_id && <span className="text-[9px] text-slate-400 italic">ID: {row.user_id.substring(0, 8)}...</span>}
+                              </div>
+                            </td>
+                          </>
+                        )}
+
+                        {selectedReportId === 'financial_valuation' && (
+                          <>
+                            <td className="py-3 px-4">{row.branch_name}</td>
+                            <td className="py-3 px-4">
+                              <span className="font-mono bg-slate-100 text-[10px] text-slate-700 rounded px-1.5 py-0.5 border border-slate-200">
+                                {row.sku_code}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-bold text-slate-800">{row.manufacturer}</td>
+                            <td className="py-3 px-4">{row.line}</td>
+                            <td className="py-3 px-4 text-center font-bold">{row.quantity}</td>
+                            <td className="py-3 px-4 text-right text-slate-500 font-mono font-bold">{formatCurrency(row.unit_cost)}</td>
+                            <td className="py-3 px-4 text-right text-brand-teal font-mono font-black">{formatCurrency(row.total_valuation)}</td>
+                            <td className="py-3 px-4 text-right text-slate-400 text-[11px]">{row.formatted_date}</td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
-          )}
-        </motion.div>
+          </div>
+        </>
       )}
 
-      <div className="bg-brand-cyan p-8 rounded-3xl text-white relative overflow-hidden">
-        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="max-w-md">
-            <h3 className="text-xl font-bold mb-2">Precisa de um relatório personalizado?</h3>
-            <p className="text-cyan-100 text-sm">
-              Nossa inteligência artificial pode cruzar dados de giro de estoque por região para sugerir compras mais assertivas.
-            </p>
-          </div>
-          <button className="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 rounded-full font-bold text-sm transition-all shadow-xl shadow-emerald-500/20">
-            Falar com Consultor Reis
-          </button>
+      {/* Advisory section */}
+      <div className="bg-slate-50 border border-slate-150 p-6 rounded-3xl relative overflow-hidden">
+        <div className="relative z-10">
+          <h3 className="text-sm font-black text-slate-800 mb-1">Dica de Exportação Corporativa 💡</h3>
+          <p className="text-xs text-slate-500 leading-normal font-medium max-w-4xl">
+            As planilhas geradas em <strong>Excel</strong> e <strong>CSV</strong> são formatadas seguindo o padrão nacional com codificação UTF-8 e delimitador de ponto e vírgula, prontas para importar em ERPs ou softwares de contabilidade. 
+            O relatório de <strong>PDF de Alta Qualidade</strong> foi estruturado especificamente em folha de orientação paisagem (A4) para assegurar o correto espaçamento de colunas sem perda de dados na dobra física de impressão.
+          </p>
         </div>
-        <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-64 h-64 bg-white/5 rounded-full" />
       </div>
     </div>
   );
