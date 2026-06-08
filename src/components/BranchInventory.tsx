@@ -16,6 +16,7 @@ import {
   Sparkles,
   Info,
   Package,
+  ShieldCheck,
   X
 } from 'lucide-react';
 import { db, getCachedBranches, getCachedFamilies, getCachedSkus } from '@/src/lib/firebase';
@@ -795,67 +796,28 @@ export default function BranchInventory() {
           )}
         </div>
 
-        {/* Split stock breakdown among branches & dynamic items listed */}
-        {selectedSph && selectedCyl && !loading && (
-          <div className="bg-white rounded-3xl p-6 border border-slate-150/80 shadow-sm space-y-5">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <Building2 size={14} className="text-brand-teal" />
-                Estoque por Filial
-              </h3>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {branches.map(b => {
-                const qty = consultantMatchingSkus.reduce((sum, item) => sum + (item.branchQtys[b.id] || 0), 0);
-                const percentage = consultantTotalStockSum > 0 ? (qty / consultantTotalStockSum) * 100 : 0;
-                
-                return (
-                  <div key={b.id} className="flex flex-col bg-slate-50/50 p-4 rounded-2xl border border-slate-100/60 hover:bg-slate-50 transition-colors">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-xs font-bold text-slate-750 uppercase tracking-wide truncate max-w-[180px]">
-                        {b.name}
-                      </span>
-                      <span className={cn(
-                        "text-xs font-black px-2.5 py-1 rounded-full",
-                        qty > 0 ? "bg-teal-50 text-brand-teal border border-teal-100" : "bg-slate-100 text-slate-400"
-                      )}>
-                        {qty} un
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                      <div 
-                        className="bg-brand-teal h-full transition-all duration-500 rounded-full" 
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
+        {/* Dynamic items found details listed (without individual branch quantities) */}
+        {selectedSph && selectedCyl && !loading && consultantMatchingSkus.length > 0 && (
+          <div className="bg-white rounded-3xl p-6 border border-slate-150/80 shadow-sm space-y-4">
+            <h3 className="text-xs font-bold text-slate-450 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-1.5">
+              <ShieldCheck size={14} className="text-brand-teal" />
+              Especificação das Lentes Disponíveis (Somatória Unificada)
+            </h3>
+            <div className="bg-slate-50 border border-slate-150/50 rounded-2xl overflow-hidden divide-y divide-slate-100">
+              {consultantMatchingSkus.map(item => (
+                <div key={item.id} className="p-3.5 flex justify-between items-center text-xs">
+                  <div>
+                    <h4 className="font-black text-slate-755">{item.sku_code}</h4>
+                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                      {item.family?.manufacturer} • {item.family?.line} • {item.family?.treatment || 'Sem tratamento'}
+                    </p>
                   </div>
-                );
-              })}
-            </div>
-
-            {consultantMatchingSkus.length > 0 && (
-              <div className="pt-4 border-t border-slate-100 space-y-3">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                  Detalhamento de Lentes Encontradas
-                </h4>
-                <div className="bg-slate-50 border border-slate-150/50 rounded-2xl overflow-hidden divide-y divide-slate-100">
-                  {consultantMatchingSkus.map(item => (
-                    <div key={item.id} className="p-3.5 flex justify-between items-center text-xs">
-                      <div>
-                        <p className="font-extrabold text-slate-700">{item.sku_code}</p>
-                        <p className="text-[10px] text-slate-400 font-medium mt-0.5">
-                          {item.family?.manufacturer} • {item.family?.line} • {item.family?.treatment || 'Sem tratamento'}
-                        </p>
-                      </div>
-                      <span className="font-black text-slate-700 bg-white shadow-xs border border-slate-150 py-1 px-3 rounded-full">
-                        {item.totalQty} un. no total
-                      </span>
-                    </div>
-                  ))}
+                  <span className="font-black text-slate-700 bg-white shadow-xs border border-slate-150 py-1 px-3.5 rounded-full">
+                    {item.totalQty} un. unificado
+                  </span>
                 </div>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
         )}
       </div>
