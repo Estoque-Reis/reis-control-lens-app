@@ -16,12 +16,26 @@ import {
   CheckCircle2, 
   RefreshCw, 
   Eye, 
+  EyeOff,
   Percent, 
   Grid3X3,
   List,
   Info,
   Loader2
 } from 'lucide-react';
+import { 
+  ResponsiveContainer, 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip as ChartTooltip, 
+  Legend as ChartLegend, 
+  PieChart, 
+  Pie, 
+  Cell 
+} from 'recharts';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -46,6 +60,7 @@ export default function ReportsFamily() {
   const [expandedFamilyId, setExpandedFamilyId] = useState<string | null>(null);
   const [detailViewMode, setDetailViewMode] = useState<'grid' | 'list'>('grid');
   const [hideZeroStockSkus, setHideZeroStockSkus] = useState<boolean>(false);
+  const [chartsVisible, setChartsVisible] = useState<boolean>(true);
 
   useEffect(() => {
     loadAllData();
@@ -192,6 +207,24 @@ export default function ReportsFamily() {
       totalRuptures,
       totalWarnings
     };
+  }, [stratifiedData]);
+
+  // Computed data for Family-level audit charts
+  const chartData = useMemo(() => {
+    if (stratifiedData.length === 0) return { qtyByManufacturer: [], valueByManufacturer: [] };
+
+    const qtyMap = new Map<string, number>();
+    const valueMap = new Map<string, number>();
+
+    stratifiedData.forEach(f => {
+      qtyMap.set(f.manufacturer, (qtyMap.get(f.manufacturer) || 0) + f.totalQty);
+      valueMap.set(f.manufacturer, (valueMap.get(f.manufacturer) || 0) + f.totalValue);
+    });
+
+    const qtyByManufacturer = Array.from(qtyMap.entries()).map(([name, value]) => ({ name, value }));
+    const valueByManufacturer = Array.from(valueMap.entries()).map(([name, value]) => ({ name, value }));
+
+    return { qtyByManufacturer, valueByManufacturer };
   }, [stratifiedData]);
 
   // Export Consolidated Report of Families to PDF
@@ -513,6 +546,20 @@ export default function ReportsFamily() {
 
         {/* Global Export actions */}
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setChartsVisible(!chartsVisible)}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border shadow-sm cursor-pointer",
+              chartsVisible 
+                ? "bg-teal-50 border-teal-200 text-brand-teal" 
+                : "bg-white hover:bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300"
+            )}
+            title="Alternar exibição de gráficos de auditoria"
+          >
+            {chartsVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+            <span>{chartsVisible ? 'Ocultar Gráficos' : 'Exibir Gráficos'}</span>
+          </button>
+
           <button 
             onClick={handleExportConsolidatedPDF}
             className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-100 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
@@ -606,6 +653,99 @@ export default function ReportsFamily() {
           </select>
         </div>
       </div>
+
+      {/* Visual Charts Dashboard Section */}
+      <AnimatePresence>
+        {chartsVisible && stratifiedData.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden space-y-6"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+              {/* Chart 1: Peças por Fabricante */}
+              <div className="p-5 bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between">
+                <div>
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                    Distribuição de Estoque por Fabricante
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-medium mb-4">
+                    Estoque total acumulado de lentes agrupados por fabricante/fornecedor.
+                  </p>
+                </div>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData.qtyByManufacturer} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="name" stroke="#94a3b8" fontSize={9} fontWeight="bold" tickLine={false} />
+                      <YAxis stroke="#94a3b8" fontSize={9} fontWeight="bold" tickLine={false} />
+                      <ChartTooltip 
+                        formatter={(value: any) => [`${value} un`, "Total"]}
+                        contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}
+                      />
+                      <Bar dataKey="value" fill="#0891b2" radius={[4, 4, 0, 0]}>
+                        {chartData.qtyByManufacturer.map((entry, index) => {
+                          const COLORS = ['#0891b2', '#0d9488', '#2563eb', '#4f46e5', '#d97706', '#e11d48', '#059669', '#8b5cf6'];
+                          return <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />;
+                        })}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Chart 2: Investimento por Fabricante */}
+              <div className="p-5 bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between">
+                <div>
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                    Investimento Financeiro por Fabricante
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-medium mb-4">
+                    Valor total de custo imobilizado por fornecedor de lentes.
+                  </p>
+                </div>
+                <div className="h-64 w-full flex items-center justify-center">
+                  {chartData.valueByManufacturer.length === 0 ? (
+                    <div className="text-xs text-slate-400 font-bold">Sem dados suficientes para gerar gráfico financeiro.</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={chartData.valueByManufacturer}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={45}
+                          outerRadius={80}
+                          paddingAngle={3}
+                          dataKey="value"
+                        >
+                          {chartData.valueByManufacturer.map((entry, index) => {
+                            const COLORS = ['#4f46e5', '#3b82f6', '#0d9488', '#059669', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6'];
+                            return <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />;
+                          })}
+                        </Pie>
+                        <ChartTooltip 
+                          formatter={(value: any) => [formatCurrency(Number(value)), "Investimento"]}
+                          contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}
+                        />
+                        <ChartLegend 
+                          iconSize={8}
+                          iconType="circle"
+                          layout="horizontal"
+                          verticalAlign="bottom"
+                          align="center"
+                          wrapperStyle={{ fontSize: '9px', fontWeight: 'bold', color: '#64748b' }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Families stratification list */}
       <div className="space-y-4">
