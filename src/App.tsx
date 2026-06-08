@@ -92,9 +92,9 @@ export default function App() {
   // Resolve active route immediately on render to prevent any admin screen flashes
   const activeRoute = currentRoute || (profile.role === 'admin' ? 'dashboard' : 'branch_inventory');
 
-  // Strict route protection for consultor (can only access branch_inventory)
-  const isConsultor = profile?.role === 'consultor';
-  const effectiveRoute = (isConsultor && activeRoute !== 'branch_inventory') 
+  // Strict route protection for non-admin profiles (can only access branch_inventory)
+  const isNonAdmin = profile?.role !== 'admin';
+  const effectiveRoute = (isNonAdmin && activeRoute !== 'branch_inventory') 
     ? 'branch_inventory' 
     : activeRoute;
 

@@ -42,11 +42,13 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
   const [tourStep, setTourStep] = useState(0);
 
   React.useEffect(() => {
+    if (!profile) return;
+    const isUserAdmin = profile.role === 'admin';
     const tourCompleted = localStorage.getItem('controle_lens_tour_completed');
-    if (!tourCompleted) {
+    if (!tourCompleted && isUserAdmin) {
       setTourOpen(true);
     }
-  }, []);
+  }, [profile]);
 
   const tourSteps = [
     {
@@ -141,16 +143,25 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
     subItems?: SubMenuItem[];
   }
 
+  const resolvedRole = profile?.role === 'admin' ? 'admin' : 'consultor';
+  const isAdmin = resolvedRole === 'admin';
+
   const menuItems: MenuItem[] = [
     { id: 'dashboard', label: 'Início', icon: LayoutDashboard, roles: ['admin'] },
+    { 
+      id: 'branch_inventory', 
+      label: 'Consulta de Estoque', 
+      icon: Search, 
+      roles: ['consultor'] 
+    },
     { 
       id: 'inventory_group', 
       label: 'Estoque', 
       icon: Package, 
-      roles: ['admin', 'consultor'],
+      roles: ['admin'],
       subItems: [
         { id: 'inventory', label: 'Estoque Geral', roles: ['admin'] },
-        { id: 'branch_inventory', label: 'Estoque por Filial', roles: ['admin', 'consultor'] },
+        { id: 'branch_inventory', label: 'Estoque por Filial', roles: ['admin'] },
         { id: 'purchase_suggestions', label: 'Sugestão de Compra', roles: ['admin'] }
       ]
     },
@@ -171,14 +182,14 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
   ];
 
   const filteredMenu = menuItems.filter(item => 
-    profile && item.roles.includes(profile.role)
+    profile && item.roles.includes(resolvedRole)
   );
 
   const getRouteTitle = (route: string) => {
     switch (route) {
       case 'dashboard': return 'Início / Dashboard';
       case 'inventory': return 'Estoque Geral';
-      case 'branch_inventory': return 'Estoque por Filial';
+      case 'branch_inventory': return isAdmin ? 'Estoque por Filial' : 'Consulta de Estoque';
       case 'purchase_suggestions': return 'Sugestões de Compra';
       case 'transfers': return 'Transferências de Lentes';
       case 'families': return 'Famílias de Lentes';
@@ -227,7 +238,7 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
             const hasSubItems = item.subItems && item.subItems.length > 0;
             const isActive = currentRoute === item.id || (item.subItems?.some(s => s.id === currentRoute) ?? false);
             
-            const allowedSubItems = item.subItems?.filter(sub => profile && sub.roles.includes(profile.role)) || [];
+            const allowedSubItems = item.subItems?.filter(sub => profile && sub.roles.includes(resolvedRole)) || [];
 
             return (
               <div key={item.id} className="space-y-1">
@@ -308,43 +319,49 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
             <h2 className="text-xl font-bold text-slate-800 capitalize hidden md:block">
               {getRouteTitle(currentRoute)}
             </h2>
-            <div className="relative group max-w-md w-full ml-8">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-              <input 
-                type="text" 
-                placeholder="Busca rápida por SKU ou refração..."
-                className="w-full pl-10 pr-4 py-2 bg-slate-100 border-transparent rounded-full text-sm focus:ring-2 focus:ring-brand-teal focus:bg-white transition-all outline-none"
-              />
-            </div>
+            {isAdmin && (
+              <div className="relative group max-w-md w-full ml-8">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                <input 
+                  type="text" 
+                  placeholder="Busca rápida por SKU ou refração..."
+                  className="w-full pl-10 pr-4 py-2 bg-slate-100 border-transparent rounded-full text-sm focus:ring-2 focus:ring-brand-teal focus:bg-white transition-all outline-none"
+                />
+              </div>
+            )}
           </div>
 
           <div className="flex items-center space-x-6">
-            <button 
-              onClick={() => {
-                setTourStep(0);
-                onNavigate('dashboard');
-                setTourOpen(true);
-              }}
-              className="flex items-center space-x-2 px-3.5 py-2 bg-cyan-50 text-brand-teal hover:bg-cyan-100/80 rounded-xl text-xs font-semibold hover:text-teal-800 transition-all cursor-pointer border border-cyan-100 shadow-sm whitespace-nowrap"
-              title="Iniciar Tour Guiado explicativo"
-            >
-              <HelpCircle size={15} className="text-brand-teal" />
-              <span>Tour Guiado</span>
-            </button>
+            {isAdmin && (
+              <>
+                <button 
+                  onClick={() => {
+                    setTourStep(0);
+                    onNavigate('dashboard');
+                    setTourOpen(true);
+                  }}
+                  className="flex items-center space-x-2 px-3.5 py-2 bg-cyan-50 text-brand-teal hover:bg-cyan-100/80 rounded-xl text-xs font-semibold hover:text-teal-800 transition-all cursor-pointer border border-cyan-100 shadow-sm whitespace-nowrap"
+                  title="Iniciar Tour Guiado explicativo"
+                >
+                  <HelpCircle size={15} className="text-brand-teal" />
+                  <span>Tour Guiado</span>
+                </button>
 
-            <button 
-              onClick={() => setShareModalOpen(true)}
-              className="flex items-center space-x-2 px-3.5 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100/80 rounded-xl text-xs font-bold transition-all cursor-pointer border border-emerald-100 shadow-sm whitespace-nowrap"
-              title="Compartilhar acesso com consultores para celular"
-            >
-              <Smartphone size={15} className="text-emerald-600 animate-bounce" />
-              <span>Acesso Celular / Copiar Link</span>
-            </button>
+                <button 
+                  onClick={() => setShareModalOpen(true)}
+                  className="flex items-center space-x-2 px-3.5 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100/80 rounded-xl text-xs font-bold transition-all cursor-pointer border border-emerald-100 shadow-sm whitespace-nowrap"
+                  title="Compartilhar acesso com consultores para celular"
+                >
+                  <Smartphone size={15} className="text-emerald-600 animate-bounce" />
+                  <span>Acesso Celular / Copiar Link</span>
+                </button>
 
-            <button className="relative p-2 text-slate-400 hover:text-brand-teal transition-colors">
-              <Bell size={20} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
+                <button className="relative p-2 text-slate-400 hover:text-brand-teal transition-colors">
+                  <Bell size={20} />
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                </button>
+              </>
+            )}
             
             <div className="flex items-center space-x-3 pl-6 border-l border-slate-200">
               <div className="text-right hidden sm:block">

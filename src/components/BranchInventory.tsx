@@ -26,8 +26,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { useAuth } from '@/src/hooks/useAuth';
 
 export default function BranchInventory() {
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [families, setFamilies] = useState<LensFamily[]>([]);
@@ -351,12 +354,37 @@ export default function BranchInventory() {
       totalQty
     };
   }).filter(item => {
-    // 1. Search Query (SKU Code with comma/dot normalization)
+    // 1. Search Query (extremely smart lookup for SKUs, manufacturer, line, treatment or dioptres)
     if (searchQuery) {
-      const skuCode = String(item?.sku_code || '');
-      const normalizedSkuCode = skuCode.toLowerCase().replace(/,/g, '.');
-      const normalizedSearchQuery = searchQuery.toLowerCase().replace(/,/g, '.');
-      if (!normalizedSkuCode.includes(normalizedSearchQuery)) {
+      const skuCode = String(item?.sku_code || '').toLowerCase().replace(/,/g, '.');
+      const manufacturer = String(item?.family?.manufacturer || '').toLowerCase();
+      const line = String(item?.family?.line || '').toLowerCase();
+      const treatment = String(item?.family?.treatment || '').toLowerCase();
+      const query = searchQuery.toLowerCase().replace(/,/g, '.').trim();
+
+      let match = skuCode.includes(query) || manufacturer.includes(query) || line.includes(query) || treatment.includes(query);
+
+      // Check if query is also a dioptre number
+      const parsedNum = parseFloat(query.replace(/[+-]/g, '').trim());
+      if (!isNaN(parsedNum)) {
+        const hasMinus = query.startsWith('-');
+        const hasPlus = query.startsWith('+');
+        
+        const matchSpherical = hasMinus 
+          ? (Math.abs(item.spherical - (-parsedNum)) < 0.01)
+          : (hasPlus 
+              ? (Math.abs(item.spherical - parsedNum) < 0.01)
+              : (Math.abs(Math.abs(item.spherical) - parsedNum) < 0.01)
+            );
+
+        const matchCylindrical = Math.abs(Math.abs(item.cylindrical) - parsedNum) < 0.01;
+        
+        if (matchSpherical || matchCylindrical) {
+          match = true;
+        }
+      }
+
+      if (!match) {
         return false;
       }
     }
@@ -537,6 +565,115 @@ export default function BranchInventory() {
   // Stats calculation
   const totalStockSum = filteredSkusList.reduce((sum, item) => sum + item.totalQty, 0);
   const activeSkusCount = filteredSkusList.filter(item => item.totalQty > 0).length;
+
+  // Render a minimal screen with only search and overall stock sum for non-admins (vendedores / consultores / visitantes)
+  if (!isAdmin) {
+    return (
+      <div className="max-w-3xl mx-auto py-10 px-4 space-y-10">
+        {/* Simple elegant title and branding */}
+        <div className="text-center space-y-2">
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center justify-center gap-2.5">
+            <Search className="text-brand-teal" size={32} />
+            Consulta de Lentes
+          </h1>
+          <p className="text-slate-400 text-sm max-w-sm mx-auto font-medium">
+            Digite o SKU, dioptria, fabricante ou linha para consultar o estoque unificado.
+          </p>
+        </div>
+
+        {/* 1 - Campo de Consulta (Highly Responsive Search Input Box) */}
+        <div className="bg-white p-5 rounded-3xl shadow-xl shadow-slate-100/50 border border-slate-100 flex items-center relative gap-4 focus-within:ring-2 focus-within:ring-brand-teal/20 transition-all">
+          <Search className="text-brand-teal shrink-0 ml-1.5" size={24} />
+          <input 
+            type="text" 
+            placeholder="O que você deseja consultar?" 
+            value={searchQuery}
+            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+            className="w-full text-lg outline-none font-extrabold text-slate-700 placeholder:text-slate-350 border-none bg-transparent"
+            autoFocus
+          />
+          {searchQuery && (
+            <button 
+              onClick={() => setSearchQuery('')}
+              className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-colors shrink-0"
+              title="Limpar busca"
+            >
+              <X size={18} />
+            </button>
+          )}
+        </div>
+
+        {/* 2 - Resultado Geral da Somatória do Estoque das Filiais */}
+        <div className="bg-gradient-to-br from-brand-cyan to-slate-900 text-white rounded-3xl shadow-2xl p-8 text-center space-y-4 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl transform translate-x-12 -translate-y-12"></div>
+          <p className="text-xs uppercase tracking-widest text-cyan-200/90 font-black">
+            Estoque Consolidado Geral
+          </p>
+          <div className="relative inline-block">
+            {loading ? (
+              <div className="h-20 flex items-center justify-center">
+                <span className="animate-pulse text-lg text-cyan-150 font-bold">Verificando estoque...</span>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <span className="text-6xl font-black tracking-tighter block font-mono">
+                  {totalStockSum}
+                </span>
+                <span className="text-xs font-extrabold text-cyan-200 uppercase tracking-widest block">
+                  lentes no estoque
+                </span>
+              </div>
+            )}
+          </div>
+
+          {searchQuery && !loading && (
+            <div className="text-xs text-cyan-200/60 font-semibold bg-white/5 py-1.5 px-3 rounded-full inline-block">
+              Filtrado por: <span className="text-white font-bold">"{searchQuery}"</span>
+            </div>
+          )}
+        </div>
+
+        {/* Simple, beautiful breakdown of where this stock is allocated (breakdown per branch) */}
+        {!loading && (
+          <div className="bg-white rounded-3xl p-6 border border-slate-150/80 shadow-sm space-y-5">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
+              <Building2 size={14} className="text-brand-teal" />
+              Estoque por Filial
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {branches.map(b => {
+                const qty = filteredSkusList.reduce((sum, item) => sum + (item.branchQtys[b.id] || 0), 0);
+                const percentage = totalStockSum > 0 ? (qty / totalStockSum) * 100 : 0;
+                
+                return (
+                  <div key={b.id} className="flex flex-col bg-slate-50/50 p-4 rounded-2xl border border-slate-100/60 hover:bg-slate-50 transition-colors">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-xs font-bold text-slate-700 uppercase tracking-wide truncate max-w-[180px]">
+                        {b.name}
+                      </span>
+                      <span className={cn(
+                        "text-xs font-black px-2.5 py-1 rounded-full",
+                        qty > 0 ? "bg-teal-50 text-brand-teal border border-teal-100" : "bg-slate-100 text-slate-400"
+                      )}>
+                        {qty} un
+                      </span>
+                    </div>
+                    {/* Visual bar tracker */}
+                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-brand-teal h-full transition-all duration-500 rounded-full" 
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
