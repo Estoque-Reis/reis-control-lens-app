@@ -45,6 +45,8 @@ export default function BranchInventory() {
   const [cilFilter, setCilFilter] = useState('');
   const [esfSign, setEsfSign] = useState<'+' | '-'>('+');
   const [onlyInStock, setOnlyInStock] = useState(false);
+  const [selectedSph, setSelectedSph] = useState<string>('');
+  const [selectedCyl, setSelectedCyl] = useState<string>('');
 
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
@@ -568,6 +570,73 @@ export default function BranchInventory() {
 
   // Render a minimal screen with only search and overall stock sum for non-admins (vendedores / consultores / visitantes)
   if (!isAdmin) {
+    // Spherical scale (+6.00 to -6.00)
+    const sphericalOptions = [];
+    for (let v = 6.00; v >= -6.00; v -= 0.25) {
+      const sign = v > 0 ? '+' : '';
+      sphericalOptions.push(`${sign}${v.toFixed(2)}`.replace('.', ','));
+    }
+
+    // Cylindrical scale (0.00 to -4.00)
+    const cylindricalOptions = [];
+    for (let v = 0.00; v >= -4.00; v -= 0.25) {
+      cylindricalOptions.push(v.toFixed(2).replace('.', ','));
+    }
+
+    const selectedSphNum = selectedSph ? parseFloat(selectedSph.replace(',', '.')) : null;
+    const selectedCylNum = selectedCyl ? parseFloat(selectedCyl.replace(',', '.')) : null;
+
+    const consultantMatchingSkus = skus.map(sku => {
+      const family = familiesMap.get(sku.family_id);
+      const branchQtys = inventoryMatrix[sku.id] || {};
+      const totalQty = Object.values(branchQtys).reduce((sum: number, q: any) => sum + (q || 0), 0);
+
+      let sphericalNum = 0;
+      if (sku.spherical !== undefined && sku.spherical !== null) {
+        if (typeof sku.spherical === 'number') {
+          sphericalNum = sku.spherical;
+        } else {
+          sphericalNum = parseFloat(String(sku.spherical).replace(',', '.').trim()) || 0;
+        }
+      }
+
+      let cylindricalNum = 0;
+      if (sku.cylindrical !== undefined && sku.cylindrical !== null) {
+        if (typeof sku.cylindrical === 'number') {
+          cylindricalNum = sku.cylindrical;
+        } else {
+          cylindricalNum = parseFloat(String(sku.cylindrical).replace(',', '.').trim()) || 0;
+        }
+      }
+
+      return {
+        ...sku,
+        sphericalNum,
+        cylindricalNum,
+        family,
+        branchQtys,
+        totalQty
+      };
+    }).filter(item => {
+      if (selectedSphNum !== null) {
+        if (Math.abs(item.sphericalNum - selectedSphNum) > 0.01) {
+          return false;
+        }
+      }
+      if (selectedCylNum !== null) {
+        if (Math.abs(item.cylindricalNum - selectedCylNum) > 0.01) {
+          return false;
+        }
+      }
+      
+      const matchManufacturer = !selectedManufacturer || item.family?.manufacturer === selectedManufacturer;
+      const matchLine = !selectedLine || item.family?.line === selectedLine;
+
+      return matchManufacturer && matchLine;
+    });
+
+    const consultantTotalStockSum = consultantMatchingSkus.reduce((sum, item) => sum + item.totalQty, 0);
+
     return (
       <div className="max-w-3xl mx-auto py-10 px-4 space-y-10">
         {/* Simple elegant title and branding */}
@@ -577,78 +646,174 @@ export default function BranchInventory() {
             Consulta de Lentes
           </h1>
           <p className="text-slate-400 text-sm max-w-sm mx-auto font-medium">
-            Digite o SKU, dioptria, fabricante ou linha para consultar o estoque unificado.
+            Selecione o grau Esférico e o Cilíndrico abaixo para consultar o estoque integrado.
           </p>
         </div>
 
-        {/* 1 - Campo de Consulta (Highly Responsive Search Input Box) */}
-        <div className="bg-white p-5 rounded-3xl shadow-xl shadow-slate-100/50 border border-slate-100 flex items-center relative gap-4 focus-within:ring-2 focus-within:ring-brand-teal/20 transition-all">
-          <Search className="text-brand-teal shrink-0 ml-1.5" size={24} />
-          <input 
-            type="text" 
-            placeholder="O que você deseja consultar?" 
-            value={searchQuery}
-            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-            className="w-full text-lg outline-none font-extrabold text-slate-700 placeholder:text-slate-350 border-none bg-transparent"
-            autoFocus
-          />
-          {searchQuery && (
-            <button 
-              onClick={() => setSearchQuery('')}
-              className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-colors shrink-0"
-              title="Limpar busca"
-            >
-              <X size={18} />
-            </button>
+        {/* 1 - Campo de Consulta (Esférico e Cilíndrico) */}
+        <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-xl shadow-slate-100/50 border border-slate-100 space-y-6">
+          <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+            <SlidersHorizontal className="text-brand-teal" size={18} />
+            <span className="font-extrabold text-slate-700 text-sm tracking-wide uppercase">Grau de Refração</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            {/* Esférico Field */}
+            <div className="space-y-2">
+              <label className="block text-xs font-black text-slate-450 uppercase tracking-widest">
+                Esférico (ESFÉRICO)
+              </label>
+              <div className="relative">
+                <select 
+                  value={selectedSph}
+                  onChange={(e) => setSelectedSph(e.target.value)}
+                  className="w-full text-lg font-extrabold text-slate-750 bg-slate-50 border border-slate-200 rounded-2xl py-3.5 px-4 focus:bg-white focus:ring-4 focus:ring-brand-teal/10 focus:border-brand-teal transition-all outline-none appearance-none cursor-pointer"
+                >
+                  <option value="">Selecione o Esférico...</option>
+                  {sphericalOptions.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-450">
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* Cilíndrico Field */}
+            <div className="space-y-2">
+              <label className="block text-xs font-black text-slate-450 uppercase tracking-widest">
+                Cilíndrico (CILINDRO)
+              </label>
+              <div className="relative">
+                <select 
+                  value={selectedCyl}
+                  onChange={(e) => setSelectedCyl(e.target.value)}
+                  className="w-full text-lg font-extrabold text-slate-750 bg-slate-50 border border-slate-200 rounded-2xl py-3.5 px-4 focus:bg-white focus:ring-4 focus:ring-brand-teal/10 focus:border-brand-teal transition-all outline-none appearance-none cursor-pointer"
+                >
+                  <option value="">Selecione o Cilíndrico...</option>
+                  {cylindricalOptions.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-450">
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Optional brand/line pickers separated visually as advanced filters */}
+          <div className="pt-4 border-t border-slate-100 space-y-4">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Filtros Opcionais de Fabricação</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Manufacturer */}
+              <div>
+                <select
+                  value={selectedManufacturer}
+                  onChange={(e) => { setSelectedManufacturer(e.target.value); setSelectedLine(''); }}
+                  className="w-full text-xs font-bold text-slate-600 bg-slate-50/70 border border-slate-200 rounded-xl py-2.5 px-3 focus:bg-white transition-all outline-none cursor-pointer"
+                >
+                  <option value="">Fabricante (Todos)</option>
+                  {manufacturers.map(man => (
+                    <option key={man} value={man}>{man}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Line */}
+              <div>
+                <select
+                  value={selectedLine}
+                  onChange={(e) => setSelectedLine(e.target.value)}
+                  className="w-full text-xs font-bold text-slate-600 bg-slate-50/70 border border-slate-200 rounded-xl py-2.5 px-3 focus:bg-white transition-all outline-none cursor-pointer"
+                >
+                  <option value="">Linha da Lente (Todas)</option>
+                  {lines.map(l => (
+                    <option key={l} value={l}>{l}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {(selectedSph || selectedCyl || selectedManufacturer || selectedLine) && (
+            <div className="flex justify-end pt-1">
+              <button
+                onClick={() => {
+                  setSelectedSph('');
+                  setSelectedCyl('');
+                  setSelectedManufacturer('');
+                  setSelectedLine('');
+                }}
+                className="text-xs font-bold text-slate-400 hover:text-rose-500 transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                <X size={14} />
+                Limpar Consulta
+              </button>
+            </div>
           )}
         </div>
 
-        {/* 2 - Resultado Geral da Somatória do Estoque das Filiais */}
+        {/* 2 - Resultado Geral da Somatória do Estoque das Filiais: "ESTOQUE GERAL" */}
         <div className="bg-gradient-to-br from-brand-cyan to-slate-900 text-white rounded-3xl shadow-2xl p-8 text-center space-y-4 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl transform translate-x-12 -translate-y-12"></div>
-          <p className="text-xs uppercase tracking-widest text-cyan-200/90 font-black">
-            Estoque Consolidado Geral
-          </p>
+          
+          <h2 className="text-xs uppercase tracking-widest text-cyan-200/90 font-black">
+            ESTOQUE GERAL
+          </h2>
+
           <div className="relative inline-block">
             {loading ? (
               <div className="h-20 flex items-center justify-center">
                 <span className="animate-pulse text-lg text-cyan-150 font-bold">Verificando estoque...</span>
               </div>
+            ) : (!selectedSph || !selectedCyl) ? (
+              <div className="py-2 text-cyan-200/70 font-semibold text-sm tracking-wide max-w-sm mx-auto">
+                Selecione os dioptros Esférico e Cilíndrico acima para exibir a somatória das filiais.
+              </div>
             ) : (
               <div className="space-y-1">
-                <span className="text-6xl font-black tracking-tighter block font-mono">
-                  {totalStockSum}
+                <span className="text-7xl font-black tracking-tighter block font-mono">
+                  {consultantTotalStockSum}
                 </span>
                 <span className="text-xs font-extrabold text-cyan-200 uppercase tracking-widest block">
-                  lentes no estoque
+                  unidades em estoque (consolidado)
                 </span>
               </div>
             )}
           </div>
 
-          {searchQuery && !loading && (
-            <div className="text-xs text-cyan-200/60 font-semibold bg-white/5 py-1.5 px-3 rounded-full inline-block">
-              Filtrado por: <span className="text-white font-bold">"{searchQuery}"</span>
+          {selectedSph && selectedCyl && !loading && (
+            <div className="text-xs text-cyan-200/60 font-semibold bg-white/5 py-1.5 px-3.5 rounded-full inline-block">
+              Grau do filtro: SPH <span className="text-white font-bold">{selectedSph}</span> • CYL <span className="text-white font-bold">-{selectedCyl.replace('-', '')}</span>
             </div>
           )}
         </div>
 
-        {/* Simple, beautiful breakdown of where this stock is allocated (breakdown per branch) */}
-        {!loading && (
+        {/* Split stock breakdown among branches & dynamic items listed */}
+        {selectedSph && selectedCyl && !loading && (
           <div className="bg-white rounded-3xl p-6 border border-slate-150/80 shadow-sm space-y-5">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
-              <Building2 size={14} className="text-brand-teal" />
-              Estoque por Filial
-            </h3>
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <Building2 size={14} className="text-brand-teal" />
+                Estoque por Filial
+              </h3>
+            </div>
+            
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {branches.map(b => {
-                const qty = filteredSkusList.reduce((sum, item) => sum + (item.branchQtys[b.id] || 0), 0);
-                const percentage = totalStockSum > 0 ? (qty / totalStockSum) * 100 : 0;
+                const qty = consultantMatchingSkus.reduce((sum, item) => sum + (item.branchQtys[b.id] || 0), 0);
+                const percentage = consultantTotalStockSum > 0 ? (qty / consultantTotalStockSum) * 100 : 0;
                 
                 return (
                   <div key={b.id} className="flex flex-col bg-slate-50/50 p-4 rounded-2xl border border-slate-100/60 hover:bg-slate-50 transition-colors">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-xs font-bold text-slate-700 uppercase tracking-wide truncate max-w-[180px]">
+                      <span className="text-xs font-bold text-slate-750 uppercase tracking-wide truncate max-w-[180px]">
                         {b.name}
                       </span>
                       <span className={cn(
@@ -658,7 +823,6 @@ export default function BranchInventory() {
                         {qty} un
                       </span>
                     </div>
-                    {/* Visual bar tracker */}
                     <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                       <div 
                         className="bg-brand-teal h-full transition-all duration-500 rounded-full" 
@@ -669,6 +833,29 @@ export default function BranchInventory() {
                 );
               })}
             </div>
+
+            {consultantMatchingSkus.length > 0 && (
+              <div className="pt-4 border-t border-slate-100 space-y-3">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                  Detalhamento de Lentes Encontradas
+                </h4>
+                <div className="bg-slate-50 border border-slate-150/50 rounded-2xl overflow-hidden divide-y divide-slate-100">
+                  {consultantMatchingSkus.map(item => (
+                    <div key={item.id} className="p-3.5 flex justify-between items-center text-xs">
+                      <div>
+                        <p className="font-extrabold text-slate-700">{item.sku_code}</p>
+                        <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                          {item.family?.manufacturer} • {item.family?.line} • {item.family?.treatment || 'Sem tratamento'}
+                        </p>
+                      </div>
+                      <span className="font-black text-slate-700 bg-white shadow-xs border border-slate-150 py-1 px-3 rounded-full">
+                        {item.totalQty} un. no total
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
