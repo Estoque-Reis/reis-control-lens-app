@@ -381,7 +381,7 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
         {/* Share Shortcut Modal */}
         <AnimatePresence>
           {shareModalOpen && (
-            <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div key="share-modal-container-root" className="fixed inset-0 z-50 overflow-y-auto">
               {/* Overlay */}
               <motion.div 
                 initial={{ opacity: 0 }}
@@ -520,7 +520,7 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
         {/* Onboarding Tour Modal */}
         <AnimatePresence>
           {tourOpen && (
-            <div className="fixed inset-0 z-[100] overflow-y-auto flex items-center justify-center">
+            <div key="tour-modal-container-root" className="fixed inset-0 z-[100] overflow-y-auto flex items-center justify-center">
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}

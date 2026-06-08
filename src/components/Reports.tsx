@@ -1110,7 +1110,7 @@ export default function Reports() {
               ) : (
                 <table className="w-full text-left border-collapse table-auto">
                   <thead>
-                    <tr className="bg-slate-50/70 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <tr key={`header_${selectedReportId}`} className="bg-slate-50/70 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                       {selectedReportId === 'inventory_current' && (
                         <>
                           <th className="py-3 px-4">Filial</th>
@@ -1186,7 +1186,7 @@ export default function Reports() {
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs text-slate-600 font-medium">
                     {filteredPreviewData.map((row, index) => (
-                      <tr key={row.id || index} className="hover:bg-slate-50/50 transition-all font-semibold">
+                      <tr key={`${selectedReportId}_${row.id || index}`} className="hover:bg-slate-50/50 transition-all font-semibold">
                         {selectedReportId === 'inventory_current' && (
                           <>
                             <td className="py-3 px-4">{row.branch_name}</td>
