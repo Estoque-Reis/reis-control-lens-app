@@ -1201,6 +1201,7 @@ export default function Reports() {
             <AnimatePresence>
               {chartsVisible && filteredPreviewData.length > 0 && (
                 <motion.div
+                  key="reports-charts-panel"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}

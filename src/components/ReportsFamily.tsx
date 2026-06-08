@@ -658,6 +658,7 @@ export default function ReportsFamily() {
       <AnimatePresence>
         {chartsVisible && stratifiedData.length > 0 && (
           <motion.div
+            key="reports-family-charts-panel"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
