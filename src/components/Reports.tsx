@@ -1222,7 +1222,7 @@ export default function Reports() {
                       </p>
                     </div>
                     <div className="h-64 w-full">
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer key={`primary_chart_${selectedReportId}_${chartData.series1.length}`} width="100%" height="100%">
                         <BarChart data={chartData.series1} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                           <XAxis dataKey="name" stroke="#94a3b8" fontSize={9} fontWeight="bold" tickLine={false} />
@@ -1265,7 +1265,7 @@ export default function Reports() {
                       {chartData.series2.length === 0 ? (
                         <div className="text-xs text-slate-400 font-bold">Sem dados suficientes para gerar gráfico secundário.</div>
                       ) : (
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer key={`secondary_chart_${selectedReportId}_${chartData.series2.length}`} width="100%" height="100%">
                           <PieChart>
                             <Pie
                               data={chartData.series2}

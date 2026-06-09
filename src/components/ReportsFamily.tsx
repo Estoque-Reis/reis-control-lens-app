@@ -669,7 +669,7 @@ export default function ReportsFamily() {
                   </p>
                 </div>
                 <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer key={`fam_qty_chart_${chartData.qtyByManufacturer.length}`} width="100%" height="100%">
                     <BarChart data={chartData.qtyByManufacturer} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis dataKey="name" stroke="#94a3b8" fontSize={9} fontWeight="bold" tickLine={false} />
@@ -703,7 +703,7 @@ export default function ReportsFamily() {
                   {chartData.valueByManufacturer.length === 0 ? (
                     <div className="text-xs text-slate-400 font-bold">Sem dados suficientes para gerar gráfico financeiro.</div>
                   ) : (
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer key={`fam_val_chart_${chartData.valueByManufacturer.length}`} width="100%" height="100%">
                       <PieChart>
                         <Pie
                           data={chartData.valueByManufacturer}
