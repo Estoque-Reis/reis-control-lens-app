@@ -655,15 +655,8 @@ export default function ReportsFamily() {
       </div>
 
       {/* Visual Charts Dashboard Section */}
-      <AnimatePresence>
-        {chartsVisible && stratifiedData.length > 0 && (
-          <motion.div
-            key="reports-family-charts-panel"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden space-y-6"
-          >
+      {chartsVisible && stratifiedData.length > 0 && (
+        <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
               {/* Chart 1: Peças por Fabricante */}
               <div className="p-5 bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between">
@@ -744,9 +737,8 @@ export default function ReportsFamily() {
                 </div>
               </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
 
       {/* Families stratification list */}
       <div className="space-y-4">
