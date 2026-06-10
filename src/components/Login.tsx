@@ -178,7 +178,7 @@ export default function Login() {
               {isSignUp ? 'Crie sua conta' : 'Acesse sua conta'}
             </h2>
             <p className="text-slate-500 mt-2">
-              {isSignUp ? 'Comece a gerenciar seu estoque hoje' : 'Bem-vindo ao Reis Controle Lens'}
+              {isSignUp ? 'Comece a gerenciar seu estoque hoje' : 'Bem-vindo ao Reis Control Lens'}
             </p>
           </div>
 
