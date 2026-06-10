@@ -783,7 +783,7 @@ export default function BranchInventory() {
                   {consultantTotalStockSum}
                 </span>
                 <span className="text-xs font-extrabold text-cyan-200 uppercase tracking-widest block">
-                  unidades em estoque (consolidado)
+                  unidades em estoque
                 </span>
               </div>
             )}
@@ -801,7 +801,7 @@ export default function BranchInventory() {
           <div className="bg-white rounded-3xl p-6 border border-slate-150/80 shadow-sm space-y-4">
             <h3 className="text-xs font-bold text-slate-450 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-1.5">
               <ShieldCheck size={14} className="text-brand-teal" />
-              Especificação das Lentes Disponíveis (Somatória Unificada)
+              Especificação das Lentes Disponíveis
             </h3>
             <div className="bg-slate-50 border border-slate-150/50 rounded-2xl overflow-hidden divide-y divide-slate-100">
               {consultantMatchingSkus.map(item => (
