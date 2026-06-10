@@ -102,6 +102,18 @@ type ReportType =
   | 'movements' 
   | 'financial_valuation';
 
+// Translate movement types
+export const translateMovType = (type: string) => {
+  switch (type) {
+    case 'entry': return { label: 'Entrada 🟢', color: 'bg-emerald-50 text-emerald-700 border-emerald-100' };
+    case 'exit': return { label: 'Saída 🔴', color: 'bg-rose-50 text-rose-700 border-rose-100' };
+    case 'writeoff': return { label: 'Baixa ⚠️', color: 'bg-amber-50 text-amber-700 border-amber-200' };
+    case 'transfer_out': return { label: 'Despacho Transferência ➡️', color: 'bg-blue-50 text-blue-700 border-blue-100' };
+    case 'transfer_in': return { label: 'Efetivado Transferência ⬅️', color: 'bg-teal-50 text-teal-700 border-teal-100' };
+    default: return { label: type, color: 'bg-slate-50 text-slate-700 border-slate-100' };
+  }
+};
+
 export default function Reports() {
   const [loading, setLoading] = useState(true);
   const [rawInventory, setRawInventory] = useState<InventoryItem[]>([]);
@@ -589,18 +601,6 @@ export default function Reports() {
 
     return { series1, series2 };
   }, [filteredPreviewData, selectedReportId]);
-
-  // Translate movement types
-  const translateMovType = (type: string) => {
-    switch (type) {
-      case 'entry': return { label: 'Entrada 🟢', color: 'bg-emerald-50 text-emerald-700 border-emerald-100' };
-      case 'exit': return { label: 'Saída 🔴', color: 'bg-rose-50 text-rose-700 border-rose-100' };
-      case 'writeoff': return { label: 'Baixa ⚠️', color: 'bg-amber-50 text-amber-700 border-amber-200' };
-      case 'transfer_out': return { label: 'Despacho Transferência ➡️', color: 'bg-blue-50 text-blue-700 border-blue-100' };
-      case 'transfer_in': return { label: 'Efetivado Transferência ⬅️', color: 'bg-teal-50 text-teal-700 border-teal-100' };
-      default: return { label: type, color: 'bg-slate-50 text-slate-700 border-slate-100' };
-    }
-  };
 
   const getExportFilename = () => {
     const activeType = reportTypes.find(r => r.id === selectedReportId);
