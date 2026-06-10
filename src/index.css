@@ -75,3 +75,123 @@
     height: 0 !important;
   }
 }
+
+/* Custom Dark Mode Overrides for absolute coverage of un-prefixed elements */
+.dark {
+  /* Layout backgrounds */
+  .bg-slate-50, .bg-slate-100/50, .bg-gray-50, .bg-slate-50\/50, .bg-slate-50\/40, .bg-slate-50\/30, .bg-[rgb(248\,250\,252)], .bg-slate-100\/40 {
+    background-color: #020617 !important;
+  }
+  
+  /* Cards, panels and white elements */
+  .bg-white, .bg-slate-100, .bg-slate-50\/20 {
+    background-color: #0d1527 !important; /* Elegant dark blue dashboard slate */
+  }
+
+  /* Table / List hover states */
+  .hover\:bg-slate-50\/50:hover, 
+  .hover\:bg-slate-50:hover, 
+  .hover\:bg-emerald-50\/40:hover, 
+  .bg-slate-50\/50:hover,
+  .p-2.hover\:bg-slate-100:hover,
+  .p-1.hover\:bg-slate-100:hover,
+  .hover\:bg-slate-100:hover {
+    background-color: #1e293b !important;
+  }
+  
+  /* Borders across the dashboard/modals/tables */
+  .border-slate-100, 
+  .border-slate-200, 
+  .border-slate-200\/40, 
+  .border-slate-300, 
+  .border-slate-200\/60,
+  .border-slate-200\/80,
+  .border-emerald-100, 
+  .border-cyan-100, 
+  .border-orange-100,
+  .border-amber-100,
+  .border-red-100,
+  .border-slate-200\/30,
+  .border-gray-250,
+  .border-gray-200 {
+    border-color: #1e293b !important;
+  }
+  
+  /* Text color overrides to ensure standard contrasts */
+  .text-slate-900, 
+  .text-slate-800, 
+  .text-slate-700, 
+  .text-gray-900, 
+  .text-gray-800, 
+  .text-slate-600 {
+    color: #f1f5f9 !important;
+  }
+  
+  /* Muted texts */
+  .text-slate-500, 
+  .text-slate-400, 
+  .text-gray-500, 
+  .text-gray-400 {
+    color: #94a3b8 !important;
+  }
+  
+  /* Inputs, selects, filters and textareas */
+  input, select, textarea {
+    background-color: #0f172a !important;
+    color: #f1f5f9 !important;
+    border-color: #334155 !important;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    border-color: #0F766E !important;
+    --tw-ring-color: #0F766E !important;
+  }
+  
+  input::placeholder {
+    color: #475569 !important;
+  }
+  
+  /* Modals background */
+  .bg-white.p-6, .bg-white.p-8, .bg-white.relative {
+    background-color: #0d1527 !important;
+    border-color: #1e293b !important;
+  }
+
+  /* Shadows adjustments for high-contrast dark depths */
+  .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  /* Tour, help, and tags preservation */
+  .bg-emerald-50, .bg-emerald-100\/10, .bg-emerald-50\/40 {
+    background-color: rgba(16, 185, 129, 0.1) !important;
+    color: #34d399 !important;
+  }
+  .bg-cyan-50, .bg-cyan-100\/10, .bg-cyan-50\/40 {
+    background-color: rgba(6, 182, 212, 0.1) !important;
+    color: #22d3ee !important;
+  }
+  .bg-amber-50, .bg-amber-100\/10, .bg-amber-50\/40 {
+    background-color: rgba(245, 158, 11, 0.1) !important;
+    color: #fbbf24 !important;
+  }
+  .bg-red-50, .bg-red-100\/10, .bg-red-50\/40 {
+    background-color: rgba(239, 68, 68, 0.1) !important;
+    color: #f87171 !important;
+  }
+  .bg-blue-50, .bg-blue-100\/10, .bg-blue-50\/40 {
+    background-color: rgba(59, 130, 246, 0.1) !important;
+    color: #60a5fa !important;
+  }
+
+  /* Special charts background and components */
+  .recharts-default-tooltip {
+    background-color: #0f172a !important;
+    border: 1px solid #1e293b !important;
+    color: #f1f5f9 !important;
+  }
+  .recharts-legend-item-text {
+    color: #94a3b8 !important;
+  }
+}
+

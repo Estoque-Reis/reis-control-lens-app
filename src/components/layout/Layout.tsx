@@ -19,7 +19,9 @@ import {
   Check,
   ExternalLink,
   QrCode,
-  HelpCircle
+  HelpCircle,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '@/src/hooks/useAuth';
@@ -30,9 +32,11 @@ interface LayoutProps {
   children: React.ReactNode;
   currentRoute: string;
   onNavigate: (route: any) => void;
+  theme: 'light' | 'dark';
+  onToggleTheme: () => void;
 }
 
-export default function Layout({ children, currentRoute, onNavigate }: LayoutProps) {
+export default function Layout({ children, currentRoute, onNavigate, theme, onToggleTheme }: LayoutProps) {
   const { profile } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -206,12 +210,12 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex transition-colors duration-200">
       {/* Sidebar */}
       <motion.aside
         initial={false}
         animate={{ width: sidebarOpen ? 280 : 80 }}
-        className="bg-brand-cyan text-white border-r border-cyan-800 flex flex-col z-50 sticky top-0 h-screen overflow-hidden"
+        className="bg-brand-cyan text-white border-r border-cyan-800 dark:bg-slate-900 dark:border-slate-850 flex flex-col z-50 sticky top-0 h-screen overflow-hidden transition-colors duration-200"
       >
         {/* Sidebar Header */}
         <div className="p-6 flex items-center justify-between border-b border-cyan-800/50">
@@ -314,9 +318,9 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="h-20 bg-white border-b border-slate-200 px-8 flex items-center justify-between sticky top-0 z-40 bg-white/80 backdrop-blur-md">
+        <header className="h-20 bg-white/80 dark:bg-slate-900/85 border-b border-slate-200 dark:border-slate-800 px-8 flex items-center justify-between sticky top-0 z-40 backdrop-blur-md transition-colors duration-200">
           <div className="flex items-center space-x-4 flex-1">
-            <h2 className="text-xl font-bold text-slate-800 capitalize hidden md:block">
+            <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 capitalize hidden md:block">
               {getRouteTitle(currentRoute)}
             </h2>
             {isAdmin && (
@@ -325,7 +329,7 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
                 <input 
                   type="text" 
                   placeholder="Busca rápida por SKU ou refração..."
-                  className="w-full pl-10 pr-4 py-2 bg-slate-100 border-transparent rounded-full text-sm focus:ring-2 focus:ring-brand-teal focus:bg-white transition-all outline-none"
+                  className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-transparent rounded-full text-sm focus:ring-2 focus:ring-brand-teal focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 transition-all outline-none"
                 />
               </div>
             )}
@@ -362,15 +366,23 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
                 </button>
               </>
             )}
+
+            <button
+              onClick={onToggleTheme}
+              className="p-2 text-slate-400 hover:text-brand-teal hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+              title={theme === 'light' ? 'Ativar Modo Escuro' : 'Ativar Modo Claro'}
+            >
+              {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+            </button>
             
-            <div className="flex items-center space-x-3 pl-6 border-l border-slate-200">
+            <div className="flex items-center space-x-3 pl-6 border-l border-slate-200 dark:border-slate-800">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-bold text-slate-800 leading-none">
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-none">
                   {profile?.full_name || profile?.email?.split('@')[0] || 'Usuário'}
                 </p>
                 <p className="text-xs text-slate-400 mt-1 capitalize">{profile?.role || 'Visitante'}</p>
               </div>
-              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-brand-teal ring-2 ring-emerald-50 ring-offset-2">
+              <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-brand-teal ring-2 ring-emerald-50 ring-offset-2">
                 {profile?.full_name?.charAt(0).toUpperCase() || profile?.email?.charAt(0).toUpperCase() || '?'}
               </div>
             </div>
@@ -390,9 +402,9 @@ export default function Layout({ children, currentRoute, onNavigate }: LayoutPro
         </div>
 
         {/* Footer */}
-        <footer className="mt-auto py-8 px-8 border-t border-slate-200 text-center flex justify-between items-center text-slate-400">
+        <footer className="mt-auto py-8 px-8 border-t border-slate-200 dark:border-slate-800 text-center flex justify-between items-center text-slate-400 dark:text-slate-500 transition-colors duration-200">
           <p className="text-xs">© {new Date().getFullYear()} Reis Controle Lens - v1.0.0</p>
-          <p className="text-xs font-medium text-slate-300">By Paulo Reis</p>
+          <p className="text-xs font-medium text-slate-300 dark:text-slate-700">By Paulo Reis</p>
         </footer>
 
         {/* Share Shortcut Modal */}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/src/hooks/useAuth';
-import { auth } from '@/src/lib/firebase';
+import { auth, db } from '@/src/lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 import Login from '@/src/components/Login';
 import Layout from '@/src/components/layout/Layout';
 import Dashboard from '@/src/components/Dashboard';
@@ -31,6 +32,40 @@ type AppRoute =
 export default function App() {
   const { user, profile, loading } = useAuth();
   const [currentRoute, setCurrentRoute] = useState<AppRoute | null>(null);
+
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    return (localStorage.getItem('controle_lens_theme') as 'light' | 'dark') || 'light';
+  });
+
+  // Sync theme with user profile
+  React.useEffect(() => {
+    if (profile?.theme && profile.theme !== theme) {
+      setTheme(profile.theme);
+    }
+  }, [profile]);
+
+  // Apply dark class and save locally
+  React.useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('controle_lens_theme', theme);
+  }, [theme]);
+
+  const handleToggleTheme = async () => {
+    const nextTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(nextTheme);
+    if (user) {
+      try {
+        await updateDoc(doc(db, 'profiles', user.uid), { theme: nextTheme });
+      } catch (err) {
+        console.error("Failed to persist theme in profile:", err);
+      }
+    }
+  };
 
   const [prevRole, setPrevRole] = useState<string | null>(null);
 
@@ -126,7 +161,12 @@ export default function App() {
   };
 
   return (
-    <Layout currentRoute={effectiveRoute} onNavigate={setCurrentRoute}>
+    <Layout 
+      currentRoute={effectiveRoute} 
+      onNavigate={setCurrentRoute}
+      theme={theme}
+      onToggleTheme={handleToggleTheme}
+    >
       {renderContent()}
     </Layout>
   );

@@ -1221,7 +1221,7 @@ export default function Reports() {
                         {selectedReportId === 'financial_valuation' && "Divisão financeira do valor total imobilizado do estoque."}
                       </p>
                     </div>
-                    <div className="h-64 w-full">
+                    <div key={`primary_chart_container_${selectedReportId}_${chartData.series1.length}`} className="h-64 w-full">
                       <ResponsiveContainer key={`primary_chart_${selectedReportId}_${chartData.series1.length}`} width="100%" height="100%">
                         <BarChart data={chartData.series1} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -1261,7 +1261,7 @@ export default function Reports() {
                         {selectedReportId === 'movements' ? "Quantidades líquidas movimentadas em cada ponto de venda." : "Análise analítica de concentração estratégica de fornecedores de lente."}
                       </p>
                     </div>
-                    <div className="h-64 w-full flex items-center justify-center">
+                    <div key={`secondary_chart_container_${selectedReportId}_${chartData.series2.length}`} className="h-64 w-full flex items-center justify-center">
                       {chartData.series2.length === 0 ? (
                         <div className="text-xs text-slate-400 font-bold">Sem dados suficientes para gerar gráfico secundário.</div>
                       ) : (

@@ -10,6 +10,7 @@
         "role": { "type": "string", "enum": ["admin", "consultor"] },
         "branch_id": { "type": "string" },
         "status": { "type": "string", "enum": ["active", "inactive"] },
+        "theme": { "type": "string", "enum": ["light", "dark"] },
         "created_at": { "type": "string", "format": "date-time" }
       },
       "required": ["email", "role", "status"]

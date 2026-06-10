@@ -43,6 +43,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [branchStockData, setBranchStockData] = useState<any[]>([]);
   const [materialData, setMaterialData] = useState<any[]>([]);
+  const [familyStockData, setFamilyStockData] = useState<any[]>([]);
   const [criticalAlerts, setCriticalAlerts] = useState<any[]>([]);
   const [recentMovements, setRecentMovements] = useState<any[]>([]);
   
@@ -103,6 +104,7 @@ export default function Dashboard() {
       let criticalCount = 0;
       const branchTotals: Record<string, number> = {};
       const materialTotals: Record<string, number> = {};
+      const familyTotals: Record<string, number> = {};
       const alerts: any[] = [];
       const attentionList: any[] = [];
 
@@ -146,12 +148,19 @@ export default function Dashboard() {
           // Material Distribution
           const materialName = family.material || 'N/A';
           materialTotals[materialName] = (materialTotals[materialName] || 0) + item.quantity;
+
+          // Family Distribution
+          const familyName = `${family.manufacturer} ${family.line}`;
+          familyTotals[familyName] = (familyTotals[familyName] || 0) + item.quantity;
         }
       });
 
       // 4. Format Chart Data
       const formattedBranchData = Object.entries(branchTotals).map(([name, stock]) => ({ name, stock }));
       const formattedMaterialData = Object.entries(materialTotals).map(([name, value]) => ({ name, value }));
+      const formattedFamilyData = Object.entries(familyTotals)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
 
       setStats({
         totalSkus: skusSnap.size,
@@ -163,6 +172,7 @@ export default function Dashboard() {
       });
       setBranchStockData(formattedBranchData);
       setMaterialData(formattedMaterialData);
+      setFamilyStockData(formattedFamilyData);
       setCriticalAlerts(alerts);
       setAttentionAlerts(attentionList);
       setRecentMovements(movements.slice(0, 10).map(m => ({
@@ -373,6 +383,51 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Families Distribution Chart */}
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+        <div className="mb-6">
+          <h3 className="text-lg font-bold text-slate-800">Distribuição de Estoque por Família</h3>
+          <p className="text-xs text-slate-400 mt-1">Quantidade de lentes físicas em estoque agregadas por fabricante e linha de produto.</p>
+        </div>
+        <div key="family_chart_container" className="h-[350px] w-full">
+          {familyStockData.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-sm text-slate-400 font-medium">
+              Nenhuma lente em estoque encontrada para as famílias.
+            </div>
+          ) : (
+            <ResponsiveContainer key={`family_responsive_container_${familyStockData.length}`} width="100%" height="100%">
+              <BarChart data={familyStockData} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis 
+                  dataKey="name" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94a3b8', fontSize: 9 }}
+                  interval={0}
+                  angle={-12}
+                  textAnchor="end"
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94a3b8', fontSize: 11 }} 
+                />
+                <Tooltip 
+                  cursor={{ fill: '#f8fafc' }}
+                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '11px', fontWeight: 'bold' }}
+                />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={24}>
+                  {familyStockData.map((entry, index) => {
+                    const familyCOLORS = ['#0d9488', '#0f766e', '#0891b2', '#2563eb', '#4f46e5', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
+                    return <Cell key={`cell-${index}`} fill={familyCOLORS[index % familyCOLORS.length]} />;
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
 

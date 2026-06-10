@@ -51,7 +51,8 @@ service cloud.firestore {
         return data.keys().hasAll(['email', 'role', 'status']) &&
                data.email is string &&
                data.role in ['admin', 'consultor'] &&
-               data.status in ['active', 'inactive'];
+               data.status in ['active', 'inactive'] &&
+               (!('theme' in data) || data.theme in ['light', 'dark']);
       }
 
       allow create: if isSignedIn() && (
@@ -61,7 +62,7 @@ service cloud.firestore {
 
       allow update: if isSignedIn() && (
         (request.auth.uid == userId && (
-          incoming().diff(existing()).affectedKeys().hasOnly(['full_name']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['full_name', 'theme']) ||
           incoming().diff(existing()).affectedKeys().hasOnly(['role', 'updated_at']) ||
           isMasterUser()
         )) ||

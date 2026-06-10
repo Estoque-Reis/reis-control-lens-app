@@ -10,6 +10,7 @@ export interface Profile {
   role: UserRole;
   branch_id: string | null;
   status: UserStatus;
+  theme?: 'light' | 'dark';
   created_at: string;
 }
 

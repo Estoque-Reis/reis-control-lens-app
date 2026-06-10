@@ -668,7 +668,7 @@ export default function ReportsFamily() {
                     Estoque total acumulado de lentes agrupados por fabricante/fornecedor.
                   </p>
                 </div>
-                <div className="h-64 w-full">
+                <div key={`fam_qty_chart_container_${chartData.qtyByManufacturer.length}`} className="h-64 w-full">
                   <ResponsiveContainer key={`fam_qty_chart_${chartData.qtyByManufacturer.length}`} width="100%" height="100%">
                     <BarChart data={chartData.qtyByManufacturer} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -699,7 +699,7 @@ export default function ReportsFamily() {
                     Valor total de custo imobilizado por fornecedor de lentes.
                   </p>
                 </div>
-                <div className="h-64 w-full flex items-center justify-center">
+                <div key={`fam_val_chart_container_${chartData.valueByManufacturer.length}`} className="h-64 w-full flex items-center justify-center">
                   {chartData.valueByManufacturer.length === 0 ? (
                     <div className="text-xs text-slate-400 font-bold">Sem dados suficientes para gerar gráfico financeiro.</div>
                   ) : (
