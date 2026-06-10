@@ -813,7 +813,7 @@ export default function BranchInventory() {
                     </p>
                   </div>
                   <span className="font-black text-slate-700 bg-white shadow-xs border border-slate-150 py-1 px-3.5 rounded-full">
-                    {item.totalQty} un. unificado
+                    {item.totalQty} un.
                   </span>
                 </div>
               ))}
