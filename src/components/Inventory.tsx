@@ -781,7 +781,9 @@ export default function Inventory() {
         getCachedFamilies(forceRefresh)
       ]);
 
-      const invData = invSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      const invData = invSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as any))
+        .filter(item => activeBranchIds.includes(item.branch_id));
 
       if (invData.length === 0) {
         setItems([]);

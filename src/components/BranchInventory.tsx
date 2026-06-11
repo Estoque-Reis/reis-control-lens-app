@@ -329,10 +329,17 @@ export default function BranchInventory() {
     setCilFilter(num.toFixed(2).replace('.', ','));
   };
 
+  const activeBranchIds = React.useMemo(() => new Set(branches.map(b => b.id)), [branches]);
+
   const filteredSkusList = skus.map(sku => {
     const family = familiesMap.get(sku.family_id);
     const branchQtys = inventoryMatrix[sku.id] || {};
-    const totalQty = Object.values(branchQtys).reduce((sum: number, q: any) => sum + (q || 0), 0);
+    const totalQty = Object.entries(branchQtys).reduce((sum: number, [bId, q]) => {
+      if (activeBranchIds.has(bId)) {
+        return sum + (q as number || 0);
+      }
+      return sum;
+    }, 0);
 
     // Safely parse spherical and cylindrical to real numbers
     let sphericalNum = 0;
@@ -595,7 +602,12 @@ export default function BranchInventory() {
     const consultantMatchingSkus = skus.map(sku => {
       const family = familiesMap.get(sku.family_id);
       const branchQtys = inventoryMatrix[sku.id] || {};
-      const totalQty = Object.values(branchQtys).reduce((sum: number, q: any) => sum + (q || 0), 0);
+      const totalQty = Object.entries(branchQtys).reduce((sum: number, [bId, q]) => {
+        if (activeBranchIds.has(bId)) {
+          return sum + (q as number || 0);
+        }
+        return sum;
+      }, 0);
 
       let sphericalNum = 0;
       if (sku.spherical !== undefined && sku.spherical !== null) {
