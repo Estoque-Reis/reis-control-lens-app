@@ -17,7 +17,7 @@ import {
   Settings,
   SlidersHorizontal
 } from 'lucide-react';
-import { db, auth, getCachedBranches, getCachedFamilies, getCachedSkus } from '@/src/lib/firebase';
+import { db, auth, getCachedBranches, getCachedFamilies, getCachedSkus, clearCache } from '@/src/lib/firebase';
 import { collection, getDocs, query, where, doc, getDoc, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useAuth } from '@/src/hooks/useAuth';
 import { LensSku, InventoryItem, Branch, LensFamily } from '@/src/types';
@@ -32,7 +32,16 @@ export default function Inventory() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [selectedFamily, setSelectedFamily] = useState<string>('');
+  const [isBranchInitialized, setIsBranchInitialized] = useState(false);
+  const [movementBranchId, setMovementBranchId] = useState('');
   const [families, setFamilies] = useState<LensFamily[]>([]);
+
+  useEffect(() => {
+    if (profile?.branch_id && !selectedBranch && !isBranchInitialized) {
+      setSelectedBranch(profile.branch_id);
+      setIsBranchInitialized(true);
+    }
+  }, [profile, isBranchInitialized, selectedBranch]);
   
   // Refraction Search State
   const [esfSign, setEsfSign] = useState<'+' | '-'>('+');
@@ -355,8 +364,16 @@ export default function Inventory() {
   const [newEsf, setNewEsf] = useState('');
   const [newCil, setNewCil] = useState('');
 
-  const fetchAllSkus = async () => {
-    const skus = await getCachedSkus();
+  useEffect(() => {
+    if (showModal && selectedItem) {
+      setMovementBranchId(selectedItem.branch_id === 'global' ? '' : selectedItem.branch_id);
+    } else {
+      setMovementBranchId('');
+    }
+  }, [showModal, selectedItem]);
+
+  const fetchAllSkus = async (forceRefresh = false) => {
+    const skus = await getCachedSkus(forceRefresh);
     setAllSkus(skus);
   };
 
@@ -492,8 +509,9 @@ export default function Inventory() {
       setNewCil('');
       setNewQty('0');
       setNewReason('');
-      fetchAllSkus();
-      fetchData();
+      clearCache('lensSkus');
+      fetchAllSkus(true);
+      fetchData(true);
     } catch (err: any) {
       console.error(err);
       alert(err.message || 'Erro ao processar estoque.');
@@ -516,6 +534,16 @@ export default function Inventory() {
   const handleMovement = async () => {
     if (!selectedItem || !qty || parseInt(qty) <= 0) return;
     
+    // Resolve target branch correctly
+    const targetBranchId = (!selectedItem.branch_id || selectedItem.branch_id === 'global') 
+      ? movementBranchId 
+      : selectedItem.branch_id;
+
+    if (!targetBranchId) {
+      alert("Por favor, selecione a filial.");
+      return;
+    }
+
     // Validar limites das dioptrias do SKU selecionado contra configurações globais
     const esf = selectedItem.sku?.spherical !== undefined ? parseFloat(String(selectedItem.sku.spherical)) : 0;
     const cil = selectedItem.sku?.cylindrical !== undefined ? parseFloat(String(selectedItem.sku.cylindrical)) : 0;
@@ -536,7 +564,6 @@ export default function Inventory() {
 
     try {
       let finalSkuId = selectedItem.sku_id;
-      let finalItemId = selectedItem.id;
 
       // Se o item for virtual e o SKU ID também for virtual, criamos o SKU na hora!
       if (selectedItem.isVirtual && selectedItem.sku_id.startsWith('virtual_sku_')) {
@@ -560,11 +587,12 @@ export default function Inventory() {
         }, { merge: true });
 
         finalSkuId = skuId;
-        finalItemId = `${selectedItem.branch_id}_${skuId}`;
-        
-        // Atualizar lista local de SKUs em background
-        fetchAllSkus();
+        // Clear lensSku cache
+        clearCache('lensSkus');
+        fetchAllSkus(true);
       }
+
+      const finalItemId = `${targetBranchId}_${finalSkuId}`;
 
       await runTransaction(db, async (transaction) => {
         const invRef = doc(db, 'inventory', finalItemId);
@@ -580,7 +608,7 @@ export default function Inventory() {
 
         // Update inventory (creates document if doesn't exist yet via set with merge)
         transaction.set(invRef, {
-          branch_id: selectedItem.branch_id,
+          branch_id: targetBranchId,
           sku_id: finalSkuId,
           quantity: newQty,
           updated_at: serverTimestamp()
@@ -589,7 +617,7 @@ export default function Inventory() {
         // Create movement log
         const movRef = doc(collection(db, 'movements'));
         transaction.set(movRef, {
-          branch_id: selectedItem.branch_id,
+          branch_id: targetBranchId,
           sku_id: finalSkuId,
           type: showModal === 'entry' ? 'entry' : (showModal === 'writeoff' ? 'writeoff' : 'exit'),
           quantity: amount,
@@ -603,7 +631,8 @@ export default function Inventory() {
       setShowModal(null);
       setQty('1');
       setReason('');
-      fetchData();
+      clearCache('lensSkus');
+      fetchData(true);
     } catch (err: any) {
       console.error("Erro no movimento:", err);
       alert("Erro: " + err.message);
@@ -625,13 +654,10 @@ export default function Inventory() {
     }
   };
 
-  const fetchData = async () => {
+  const fetchData = async (forceRefresh = false) => {
     setLoading(true);
     try {
-      const currentBranchId = selectedBranch || profile?.branch_id;
-      if (!selectedBranch && profile?.branch_id) {
-        setSelectedBranch(profile.branch_id);
-      }
+      const currentBranchId = selectedBranch;
 
       // 1. Fetch Inventory for the branch
       let invQuery = collection(db, 'inventory');
@@ -643,8 +669,8 @@ export default function Inventory() {
       // Fetch inventory concurrently with static SKUs/Families from local memory cache
       const [invSnapshot, skus, families] = await Promise.all([
         getDocs(q),
-        getCachedSkus(),
-        getCachedFamilies()
+        getCachedSkus(forceRefresh),
+        getCachedFamilies(forceRefresh)
       ]);
 
       const invData = invSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
@@ -826,9 +852,10 @@ export default function Inventory() {
             </button>
             <button 
               onClick={() => {
-                fetchAllSkus();
+                fetchAllSkus(true);
                 setNewSkuModalMode('entry');
                 setNewReason('');
+                setNewBranchId(selectedBranch || profile?.branch_id || '');
                 setShowNewSkuModal(true);
               }}
               className="flex items-center px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg text-sm font-semibold hover:bg-emerald-100 transition-colors cursor-pointer"
@@ -837,9 +864,10 @@ export default function Inventory() {
             </button>
             <button 
               onClick={() => {
-                fetchAllSkus();
+                fetchAllSkus(true);
                 setNewSkuModalMode('writeoff');
                 setNewReason('');
+                setNewBranchId(selectedBranch || profile?.branch_id || '');
                 setShowNewSkuModal(true);
               }}
               className="flex items-center px-4 py-2 bg-amber-50 text-amber-600 rounded-lg text-sm font-semibold hover:bg-amber-100 transition-colors cursor-pointer"
@@ -1559,6 +1587,22 @@ export default function Inventory() {
               )}
 
               <div className="space-y-4">
+                {(!selectedItem || !selectedItem.branch_id || selectedItem.branch_id === 'global') && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Filial de Destino</label>
+                    <select 
+                      value={movementBranchId}
+                      onChange={(e) => setMovementBranchId(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal text-sm font-semibold"
+                    >
+                      <option value="">Selecione a Filial</option>
+                      {branches.map(b => (
+                        <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Quantidade</label>
                   <input 
