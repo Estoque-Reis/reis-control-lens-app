@@ -343,6 +343,21 @@ export default function Inventory() {
     return Array.from({ length: len }, (_, i) => (max - i * step).toFixed(2));
   }, [gridConfig.cil_min, gridConfig.cil_max, gridConfig.cil_step]);
 
+  const currentEsfValue = React.useMemo(() => {
+    if (!refSearch.esf) return '';
+    const cleanEsf = refSearch.esf.replace(',', '.');
+    const signed = esfSign === '-' ? `-${cleanEsf.replace(/^[+-]/, '')}` : cleanEsf.replace(/^[+-]/, '');
+    const num = parseFloat(signed);
+    return isNaN(num) ? '' : num.toFixed(2);
+  }, [refSearch.esf, esfSign]);
+
+  const currentCilValue = React.useMemo(() => {
+    if (!refSearch.cil) return '';
+    const cleanCil = refSearch.cil.replace(',', '.');
+    const num = -Math.abs(parseFloat(cleanCil));
+    return isNaN(num) ? '' : num.toFixed(2);
+  }, [refSearch.cil]);
+
   // Modal states
   const [showModal, setShowModal] = useState<'entry' | 'exit' | 'writeoff' | null>(null);
   const [selectedItem, setSelectedItem] = useState<any>(null);
@@ -913,38 +928,44 @@ export default function Inventory() {
         <div className="md:col-span-12 lg:col-span-8">
           <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Consulta por Refração (Filtro Rápido)</label>
           <div className="flex flex-col sm:flex-row gap-3">
-            {/* ESF (Spherical) Input Card */}
+            {/* ESF (Spherical) Select Card */}
             <div className="flex-1 flex bg-white border-2 border-slate-300 rounded-xl overflow-hidden focus-within:ring-4 focus-within:ring-brand-teal/15 focus-within:border-brand-teal transition-all h-14 shadow-sm min-w-0">
               <div className="bg-brand-teal text-white w-10 px-0.5 h-full flex items-center justify-center font-black text-xs uppercase select-none shrink-0 antialiased">
                 ESF
               </div>
-              <button 
-                onClick={() => setEsfSign(prev => prev === '+' ? '-' : '+')}
-                className={cn(
-                  "w-9 h-full flex items-center justify-center text-xl font-black border-r border-slate-100 hover:bg-slate-50 active:bg-slate-100 transition-colors shrink-0 cursor-pointer",
-                  esfSign === '+' ? "text-emerald-600 animate-pulse" : "text-rose-600 animate-pulse"
-                )}
-                title="Alternar Sinal (Sinal de ESF)"
-              >
-                {esfSign}
-              </button>
-              <input 
-                type="text" 
-                value={refSearch.esf}
-                onChange={handleEsfChange}
-                onBlur={handleEsfBlur}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleApplyFilter();
-                  }
-                }}
-                onScroll={(e) => { e.currentTarget.scrollLeft = 0; }}
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', overflowX: 'hidden', overflowY: 'hidden' }}
-                className="flex-1 min-w-[70px] h-full text-center text-base sm:text-lg font-black text-slate-800 placeholder-slate-400 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-1 transition-all overflow-hidden py-0 leading-none"
-                placeholder="0,00"
-              />
-              <div className="flex items-center h-full shrink-0 pr-1 border-l border-slate-100 bg-slate-50/70">
-                {refSearch.esf && (
+              <div className="relative flex-1 h-full min-w-[70px]">
+                <select 
+                  value={currentEsfValue}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) {
+                      setRefSearch(prev => ({ ...prev, esf: '' }));
+                      setEsfSign('+');
+                    } else {
+                      const parsed = parseFloat(val);
+                      const absValStr = Math.abs(parsed).toFixed(2).replace('.', ',');
+                      const sign = parsed < 0 ? '-' : '+';
+                      setRefSearch(prev => ({ ...prev, esf: absValStr }));
+                      setEsfSign(sign);
+                    }
+                  }}
+                  className="w-full h-full text-center text-sm sm:text-base font-black text-slate-800 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-4 pr-10 transition-all cursor-pointer appearance-none"
+                >
+                  <option value="" className="font-bold text-slate-500">Todos (ESF)</option>
+                  {esfScale.map(esf => (
+                    <option key={esf} value={parseFloat(esf).toFixed(2)} className="font-black text-slate-800">
+                      {formatRefraction(parseFloat(esf))}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-450">
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                  </svg>
+                </div>
+              </div>
+              {refSearch.esf && (
+                <div className="flex items-center h-full shrink-0 pr-1 border-l border-slate-100 bg-slate-50/70">
                   <button 
                     onClick={() => {
                       setRefSearch(prev => ({ ...prev, esf: '' }));
@@ -956,38 +977,45 @@ export default function Inventory() {
                   >
                     <X size={16} />
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
-            {/* CIL (Cylindrical) Input Card */}
+            {/* CIL (Cylindrical) Select Card */}
             <div className="flex-1 flex bg-white border-2 border-slate-300 rounded-xl overflow-hidden focus-within:ring-4 focus-within:ring-brand-teal/15 focus-within:border-brand-teal transition-all h-14 shadow-sm min-w-0">
               <div className="bg-brand-teal text-white w-10 px-0.5 h-full flex items-center justify-center font-black text-xs uppercase select-none shrink-0 antialiased">
                 CIL
               </div>
-              <div 
-                className="w-9 h-full flex items-center justify-center text-xl font-black border-r border-slate-100 text-rose-600 select-none shrink-0 bg-rose-50/10"
-                title="Sinal Negativo Padrão"
-              >
-                -
+              <div className="relative flex-1 h-full min-w-[70px]">
+                <select 
+                  value={currentCilValue}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) {
+                      setRefSearch(prev => ({ ...prev, cil: '' }));
+                    } else {
+                      const parsed = parseFloat(val);
+                      const absValStr = Math.abs(parsed).toFixed(2).replace('.', ',');
+                      setRefSearch(prev => ({ ...prev, cil: absValStr }));
+                    }
+                  }}
+                  className="w-full h-full text-center text-sm sm:text-base font-black text-slate-800 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-4 pr-10 transition-all cursor-pointer appearance-none"
+                >
+                  <option value="" className="font-bold text-slate-500">Todos (CIL)</option>
+                  {cilScale.map(cil => (
+                    <option key={cil} value={parseFloat(cil).toFixed(2)} className="font-black text-slate-800">
+                      {formatCylinder(parseFloat(cil))}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-450">
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                  </svg>
+                </div>
               </div>
-              <input 
-                type="text" 
-                value={refSearch.cil}
-                onChange={handleCilChange}
-                onBlur={handleCilBlur}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleApplyFilter();
-                  }
-                }}
-                onScroll={(e) => { e.currentTarget.scrollLeft = 0; }}
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', overflowX: 'hidden', overflowY: 'hidden' }}
-                className="flex-1 min-w-[70px] h-full text-center text-base sm:text-lg font-black text-slate-800 placeholder-slate-400 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-1 transition-all overflow-hidden py-0 leading-none"
-                placeholder="0,00"
-              />
-              <div className="flex items-center h-full shrink-0 pr-1 border-l border-slate-100 bg-slate-50/70">
-                {refSearch.cil && (
+              {refSearch.cil && (
+                <div className="flex items-center h-full shrink-0 pr-1 border-l border-slate-100 bg-slate-50/70">
                   <button 
                     onClick={() => {
                       setRefSearch(prev => ({ ...prev, cil: '' }));
@@ -999,8 +1027,8 @@ export default function Inventory() {
                   >
                     <X size={16} />
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
             <button 
