@@ -20,9 +20,9 @@ export function formatRefraction(value: number) {
 }
 
 export function formatCylinder(value: number) {
-  if (value === null || value === undefined) return '0,00';
+  if (value === null || value === undefined) return '-0,00';
   const val = Number(value);
-  if (Math.abs(val) < 0.01) return '0,00';
+  if (Math.abs(val) < 0.01) return '-0,00';
   return '-' + Math.abs(val).toFixed(2).replace('.', ',');
 }
 

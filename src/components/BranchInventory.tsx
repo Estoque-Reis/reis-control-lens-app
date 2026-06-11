@@ -53,24 +53,24 @@ export default function BranchInventory() {
 
   // Custom Diopter limits configuration retrieved from Firestore
   const [gridConfig, setGridConfig] = useState({
-    esf_min: -2.00,
-    esf_max: 2.00,
+    esf_min: -6.00,
+    esf_max: 6.00,
     esf_step: 0.25,
-    cil_min: -2.00,
+    cil_min: -2.50,
     cil_max: 0.00,
     cil_step: 0.25
   });
 
-  // Dynamic scale generators using settings state (fallback to +2/-2 if invalid)
+  // Dynamic scale generators using settings state (fallback to +6/-6 if invalid)
   const esfScale = React.useMemo(() => {
     const min = parseFloat(String(gridConfig.esf_min));
     const max = parseFloat(String(gridConfig.esf_max));
     const step = parseFloat(String(gridConfig.esf_step)) || 0.25;
     if (isNaN(min) || isNaN(max) || min >= max) {
-      return Array.from({ length: 17 }, (_, i) => (2 - i * 0.25).toFixed(2));
+      return Array.from({ length: 49 }, (_, i) => (6 - i * 0.25).toFixed(2));
     }
     const len = Math.round((max - min) / step) + 1;
-    if (len <= 0 || len > 100) return Array.from({ length: 17 }, (_, i) => (2 - i * 0.25).toFixed(2));
+    if (len <= 0 || len > 100) return Array.from({ length: 49 }, (_, i) => (6 - i * 0.25).toFixed(2));
     return Array.from({ length: len }, (_, i) => (max - i * step).toFixed(2));
   }, [gridConfig.esf_min, gridConfig.esf_max, gridConfig.esf_step]);
 
@@ -79,10 +79,10 @@ export default function BranchInventory() {
     const max = parseFloat(String(gridConfig.cil_max));
     const step = parseFloat(String(gridConfig.cil_step)) || 0.25;
     if (isNaN(min) || isNaN(max) || min >= max) {
-      return Array.from({ length: 9 }, (_, i) => (-i * 0.25).toFixed(2));
+      return Array.from({ length: 11 }, (_, i) => (-i * 0.25).toFixed(2));
     }
     const len = Math.round((max - min) / step) + 1;
-    if (len <= 0 || len > 100) return Array.from({ length: 9 }, (_, i) => (-i * 0.25).toFixed(2));
+    if (len <= 0 || len > 100) return Array.from({ length: 11 }, (_, i) => (-i * 0.25).toFixed(2));
     return Array.from({ length: len }, (_, i) => (max - i * step).toFixed(2));
   }, [gridConfig.cil_min, gridConfig.cil_max, gridConfig.cil_step]);
 
@@ -112,14 +112,19 @@ export default function BranchInventory() {
 
       if (configSnap.exists()) {
         const data = configSnap.data();
-        setGridConfig({
-          esf_min: typeof data.esf_min === 'number' ? data.esf_min : -2.00,
-          esf_max: typeof data.esf_max === 'number' ? data.esf_max : 2.00,
-          esf_step: typeof data.esf_step === 'number' ? data.esf_step : 0.25,
-          cil_min: typeof data.cil_min === 'number' ? data.cil_min : -2.00,
-          cil_max: typeof data.cil_max === 'number' ? data.cil_max : 0.00,
-          cil_step: typeof data.cil_step === 'number' ? data.cil_step : 0.25,
-        });
+        let esf_min = typeof data.esf_min === 'number' ? data.esf_min : -6.00;
+        let esf_max = typeof data.esf_max === 'number' ? data.esf_max : 6.00;
+        let esf_step = typeof data.esf_step === 'number' ? data.esf_step : 0.25;
+        let cil_min = typeof data.cil_min === 'number' ? data.cil_min : -2.50;
+        let cil_max = typeof data.cil_max === 'number' ? data.cil_max : 0.00;
+        let cil_step = typeof data.cil_step === 'number' ? data.cil_step : 0.25;
+
+        if (esf_min > -6.0) esf_min = -6.0;
+        if (esf_max < 6.0) esf_max = 6.0;
+        if (cil_min > -2.5) cil_min = -2.5;
+        if (cil_max < 0.0) cil_max = 0.0;
+
+        setGridConfig({ esf_min, esf_max, esf_step, cil_min, cil_max, cil_step });
       }
 
       setBranches(branchesData.filter(b => b.status === 'active'));

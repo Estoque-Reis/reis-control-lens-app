@@ -43,19 +43,19 @@ export default function Inventory() {
 
   // Custom Diopter limits configuration retrieved from Firestore
   const [gridConfig, setGridConfig] = useState({
-    esf_min: -2.00,
-    esf_max: 2.00,
+    esf_min: -6.00,
+    esf_max: 6.00,
     esf_step: 0.25,
-    cil_min: -2.00,
+    cil_min: -2.50,
     cil_max: 0.00,
     cil_step: 0.25
   });
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [configForm, setConfigForm] = useState({
-    esf_min: '-2.00',
-    esf_max: '2.00',
+    esf_min: '-6.00',
+    esf_max: '6.00',
     esf_step: '0.25',
-    cil_min: '-2.00',
+    cil_min: '-2.50',
     cil_max: '0.00',
     cil_step: '0.25'
   });
@@ -67,14 +67,34 @@ export default function Inventory() {
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
-        const conf = {
-          esf_min: typeof data.esf_min === 'number' ? data.esf_min : -2.00,
-          esf_max: typeof data.esf_max === 'number' ? data.esf_max : 2.00,
-          esf_step: typeof data.esf_step === 'number' ? data.esf_step : 0.25,
-          cil_min: typeof data.cil_min === 'number' ? data.cil_min : -2.00,
-          cil_max: typeof data.cil_max === 'number' ? data.cil_max : 0.00,
-          cil_step: typeof data.cil_step === 'number' ? data.cil_step : 0.25,
-        };
+        let esf_min = typeof data.esf_min === 'number' ? data.esf_min : -6.00;
+        let esf_max = typeof data.esf_max === 'number' ? data.esf_max : 6.00;
+        let esf_step = typeof data.esf_step === 'number' ? data.esf_step : 0.25;
+        let cil_min = typeof data.cil_min === 'number' ? data.cil_min : -2.50;
+        let cil_max = typeof data.cil_max === 'number' ? data.cil_max : 0.00;
+        let cil_step = typeof data.cil_step === 'number' ? data.cil_step : 0.25;
+
+        // Auto-upgrade limits to fit at least the requested scope
+        let needsUpdate = false;
+        if (esf_min > -6.0) { esf_min = -6.0; needsUpdate = true; }
+        if (esf_max < 6.0) { esf_max = 6.0; needsUpdate = true; }
+        if (cil_min > -2.5) { cil_min = -2.5; needsUpdate = true; }
+        if (cil_max < 0.0) { cil_max = 0.0; needsUpdate = true; }
+
+        const conf = { esf_min, esf_max, esf_step, cil_min, cil_max, cil_step };
+
+        if (needsUpdate) {
+          try {
+            await setDoc(docRef, {
+              ...conf,
+              updated_at: new Date().toISOString(),
+              updated_by: 'system_auto_limit_upgrade'
+            }, { merge: true });
+          } catch (e) {
+            console.warn("Could not write updated limits (permissions / role constraint) - using memory-grade defaults:", e);
+          }
+        }
+
         setGridConfig(conf);
         setConfigForm({
           esf_min: conf.esf_min.toFixed(2),
@@ -83,6 +103,38 @@ export default function Inventory() {
           cil_min: conf.cil_min.toFixed(2),
           cil_max: conf.cil_max.toFixed(2),
           cil_step: conf.cil_step.toFixed(2)
+        });
+      } else {
+        const defaultLimits = {
+          esf_min: -6.00,
+          esf_max: 6.00,
+          esf_step: 0.25,
+          cil_min: -2.50,
+          cil_max: 0.00,
+          cil_step: 0.25,
+          updated_at: new Date().toISOString(),
+          updated_by: 'system_bootstrap'
+        };
+        try {
+          await setDoc(docRef, defaultLimits);
+        } catch (e) {
+          console.warn("Could not save bootstrapped limits:", e);
+        }
+        setGridConfig({
+          esf_min: -6.00,
+          esf_max: 6.00,
+          esf_step: 0.25,
+          cil_min: -2.50,
+          cil_max: 0.00,
+          cil_step: 0.25,
+        });
+        setConfigForm({
+          esf_min: '-6.00',
+          esf_max: '6.00',
+          esf_step: '0.25',
+          cil_min: '-2.50',
+          cil_max: '0.00',
+          cil_step: '0.25'
         });
       }
     } catch (err) {
