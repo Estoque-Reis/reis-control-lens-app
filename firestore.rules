@@ -93,7 +93,7 @@ service cloud.firestore {
       allow read: if isSignedIn();
       // Inventory updates are often triggered by movements.
       // If we handle it client-side with batches, we need to allow create/update.
-      allow create, update: if isSignedIn(); 
+      allow create, update, delete: if isSignedIn(); 
     }
 
     // Movements
