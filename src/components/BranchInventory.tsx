@@ -127,7 +127,7 @@ export default function BranchInventory() {
         setGridConfig({ esf_min, esf_max, esf_step, cil_min, cil_max, cil_step });
       }
 
-      setBranches(branchesData.filter(b => b.status === 'active'));
+      setBranches(branchesData.filter(b => b.status === 'active' && b.id !== 'outra' && b.id !== 'outras' && b.code !== 'outra' && !b.name?.toLowerCase().includes('outra')));
       setFamilies(familiesData);
       setSkus(skusData);
 

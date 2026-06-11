@@ -689,21 +689,76 @@ export default function Inventory() {
       // Real-time cleanup of inactive stocks or 'outra' branch stocks
       const bSnap = await getCachedBranches(forceRefresh);
       const activeBranchIds = bSnap
-        .filter((b: any) => b.status === 'active' && b.id !== 'outra' && b.id !== 'outras' && b.code !== 'outra')
+        .filter((b: any) => b.status === 'active' && b.id !== 'outra' && b.id !== 'outras' && b.code !== 'outra' && !b.name?.toLowerCase().includes('outra'))
         .map((b: any) => b.id);
+
+      const cleanupSkus = await getCachedSkus(forceRefresh);
+      const cleanupFamilies = await getCachedFamilies(forceRefresh);
+
+      const cleanupSkusMap: Record<string, any> = {};
+      cleanupSkus.forEach(s => { cleanupSkusMap[s.id] = s; });
+
+      const cleanupFamiliesMap: Record<string, any> = {};
+      cleanupFamilies.forEach(f => { cleanupFamiliesMap[f.id] = f; });
 
       const fullInvSnapshot = await getDocs(collection(db, 'inventory'));
       const invalidDocs = fullInvSnapshot.docs.filter(docSnap => {
         const itemData = docSnap.data();
         const bId = itemData.branch_id || '';
-        const isOutra = bId === 'outra' || bId === 'outras' || bId === 'outro' || bId === '';
+        const isOutraOnId = bId === 'outra' || bId === 'outras' || bId === 'outro' || bId === '';
+        
+        // Check if branch name or code contains "outra"
+        const branchObj = bSnap.find((b: any) => b.id === bId);
+        const branchNameLower = String(branchObj?.name || '').toLowerCase();
+        const branchCodeLower = String(branchObj?.code || '').toLowerCase();
+        const isOutraOnDetails = branchNameLower.includes('outra') || branchCodeLower.includes('outra') || branchNameLower.includes('outras');
+
         const isInactiveOrUnregistered = !activeBranchIds.includes(bId);
-        return isOutra || isInactiveOrUnregistered;
+        return isOutraOnId || isOutraOnDetails || isInactiveOrUnregistered;
       });
 
-      if (invalidDocs.length > 0) {
-        console.log(`Cleaning up ${invalidDocs.length} invalid/inactive branch stock documents`);
-        for (const badDoc of invalidDocs) {
+      // Target RESIDUAL VERDE-ESF-5,25-CIL-1,25 on any branch containing "outra" or inactive/legacy
+      const residualVerdeTargets = fullInvSnapshot.docs.filter(docSnap => {
+        const itemData = docSnap.data();
+        const bId = itemData.branch_id || '';
+        const skuId = itemData.sku_id || '';
+        const sku = cleanupSkusMap[skuId];
+        if (!sku) return false;
+        
+        const family = cleanupFamiliesMap[sku.family_id];
+        if (!family) return false;
+
+        const familyName = String(family.line || family.name || '').toUpperCase();
+        const isVerdeResidual = familyName.includes('RESIDUAL VERDE') || familyName.includes('VERDE RESIDUAL');
+
+        const esfVal = Math.abs(parseFloat(String(sku.spherical || 0)));
+        const cilVal = Math.abs(parseFloat(String(sku.cylindrical || 0)));
+
+        const isTargetRefraction = isVerdeResidual && Math.abs(esfVal - 5.25) < 0.01 && Math.abs(cilVal - 1.25) < 0.01;
+
+        if (isTargetRefraction) {
+          const branchObj = bSnap.find((b: any) => b.id === bId);
+          const branchNameLower = String(branchObj?.name || '').toLowerCase();
+          const branchCodeLower = String(branchObj?.code || '').toLowerCase();
+          const isFromOutraBranch = bId === 'outra' || bId === 'outras' || bId === 'outro' ||
+                                    branchNameLower.includes('outra') || branchCodeLower.includes('outra') ||
+                                    branchNameLower.includes('outras') || !activeBranchIds.includes(bId);
+          return isFromOutraBranch;
+        }
+        return false;
+      });
+
+      // Combine documents to delete
+      const docsToDelete = [...invalidDocs];
+      residualVerdeTargets.forEach(targetDoc => {
+        if (!docsToDelete.some(d => d.id === targetDoc.id)) {
+          docsToDelete.push(targetDoc);
+        }
+      });
+
+      if (docsToDelete.length > 0) {
+        console.log(`Cleaning up ${docsToDelete.length} invalid/inactive branch/residual stock documents:`, docsToDelete.map(d => d.id));
+        for (const badDoc of docsToDelete) {
           try {
             await deleteDoc(doc(db, 'inventory', badDoc.id));
           } catch (deleteErr) {
