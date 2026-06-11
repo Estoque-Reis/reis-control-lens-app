@@ -18,7 +18,7 @@ import {
   SlidersHorizontal
 } from 'lucide-react';
 import { db, auth, getCachedBranches, getCachedFamilies, getCachedSkus, clearCache } from '@/src/lib/firebase';
-import { collection, getDocs, query, where, doc, getDoc, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc, runTransaction, serverTimestamp, setDoc, deleteDoc } from 'firebase/firestore';
 import { useAuth } from '@/src/hooks/useAuth';
 import { LensSku, InventoryItem, Branch, LensFamily } from '@/src/types';
 import { cn, formatRefraction, formatCylinder, generateSkuCode } from '@/src/lib/utils';
@@ -398,6 +398,12 @@ export default function Inventory() {
       return;
     }
 
+    const targetBranch = branches.find(b => b.id === newBranchId);
+    if (!targetBranch || targetBranch.status !== 'active' || targetBranch.id === 'outra' || targetBranch.id === 'outras' || targetBranch.code === 'outra') {
+      alert("Operação permitida apenas para filiais cadastradas e ativas.");
+      return;
+    }
+
     const qtyAmount = parseInt(newQty);
     if (isNaN(qtyAmount) || qtyAmount < 0) {
       alert("Por favor, insira uma quantidade válida.");
@@ -559,6 +565,12 @@ export default function Inventory() {
       return;
     }
 
+    const targetBranch = branches.find(b => b.id === targetBranchId);
+    if (!targetBranch || targetBranch.status !== 'active' || targetBranch.id === 'outra' || targetBranch.id === 'outras' || targetBranch.code === 'outra') {
+      alert("Operação permitida apenas para filiais cadastradas e ativas.");
+      return;
+    }
+
     // Validar limites das dioptrias do SKU selecionado contra configurações globais
     const esf = selectedItem.sku?.spherical !== undefined ? parseFloat(String(selectedItem.sku.spherical)) : 0;
     const cil = selectedItem.sku?.cylindrical !== undefined ? parseFloat(String(selectedItem.sku.cylindrical)) : 0;
@@ -673,6 +685,32 @@ export default function Inventory() {
     setLoading(true);
     try {
       const currentBranchId = selectedBranch;
+
+      // Real-time cleanup of inactive stocks or 'outra' branch stocks
+      const bSnap = await getCachedBranches(forceRefresh);
+      const activeBranchIds = bSnap
+        .filter((b: any) => b.status === 'active' && b.id !== 'outra' && b.id !== 'outras' && b.code !== 'outra')
+        .map((b: any) => b.id);
+
+      const fullInvSnapshot = await getDocs(collection(db, 'inventory'));
+      const invalidDocs = fullInvSnapshot.docs.filter(docSnap => {
+        const itemData = docSnap.data();
+        const bId = itemData.branch_id || '';
+        const isOutra = bId === 'outra' || bId === 'outras' || bId === 'outro' || bId === '';
+        const isInactiveOrUnregistered = !activeBranchIds.includes(bId);
+        return isOutra || isInactiveOrUnregistered;
+      });
+
+      if (invalidDocs.length > 0) {
+        console.log(`Cleaning up ${invalidDocs.length} invalid/inactive branch stock documents`);
+        for (const badDoc of invalidDocs) {
+          try {
+            await deleteDoc(doc(db, 'inventory', badDoc.id));
+          } catch (deleteErr) {
+            console.error("Error deleting stale inventory doc:", deleteErr);
+          }
+        }
+      }
 
       // 1. Fetch Inventory for the branch
       let invQuery = collection(db, 'inventory');
@@ -1441,7 +1479,9 @@ export default function Inventory() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal transition-all text-sm font-medium"
                   >
                     <option value="">Selecione a Filial</option>
-                    {branches.map(b => <option key={b.id} value={b.id}>{b.name} ({b.code})</option>)}
+                    {branches.filter(b => b.status === 'active' && b.id !== 'outra' && b.id !== 'outras' && b.code !== 'outra').map(b => (
+                      <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+                    ))}
                   </select>
                 </div>
 
@@ -1624,7 +1664,7 @@ export default function Inventory() {
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal text-sm font-semibold"
                     >
                       <option value="">Selecione a Filial</option>
-                      {branches.map(b => (
+                      {branches.filter(b => b.status === 'active' && b.id !== 'outra' && b.id !== 'outras' && b.code !== 'outra').map(b => (
                         <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
                       ))}
                     </select>

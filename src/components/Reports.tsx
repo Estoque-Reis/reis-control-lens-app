@@ -187,9 +187,12 @@ export default function Reports() {
         getCachedSkus(forceRefresh)
       ]);
 
-      setRawInventory(invSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem)));
-      setRawMovements(movSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as MovementItem)));
-      setBranches(branchesList.filter(b => b.status !== 'inactive'));
+      const filteredBranches = branchesList.filter(b => b.status === "active" && b.id !== "outra" && b.id !== "outras" && b.code !== "outra");
+      const activeBranchIds = filteredBranches.map(b => b.id);
+
+      setRawInventory((invSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem))).filter(item => activeBranchIds.includes(item.branch_id)));
+      setRawMovements((movSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any))).filter(item => activeBranchIds.includes(item.branch_id)) as any);
+      setBranches(filteredBranches);
       setFamilies(familiesList);
       setSkus(skusList);
     } catch (err) {

@@ -129,6 +129,15 @@ export default function Transfers() {
       return;
     }
 
+    const fromBranch = branches.find(b => b.id === fromBranchId);
+    const toBranch = branches.find(b => b.id === toBranchId);
+
+    if (!fromBranch || fromBranch.status !== 'active' || fromBranch.id === 'outra' || fromBranch.id === 'outras' || fromBranch.code === 'outra' ||
+        !toBranch || toBranch.status !== 'active' || toBranch.id === 'outra' || toBranch.id === 'outras' || toBranch.code === 'outra') {
+      alert("Transferência permitida apenas entre filiais cadastradas e ativas.");
+      return;
+    }
+
     setTransferLoading(true);
     const amount = parseInt(quantity);
     if (isNaN(amount) || amount <= 0) {
@@ -417,7 +426,7 @@ export default function Transfers() {
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal"
                   >
                     <option value="">Selecione a Origem</option>
-                    {branches.map(b => (
+                    {branches.filter(b => b.status === 'active' && b.id !== 'outra' && b.id !== 'outras' && b.code !== 'outra').map(b => (
                       <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
                     ))}
                   </select>
@@ -431,7 +440,7 @@ export default function Transfers() {
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal"
                   >
                     <option value="">Selecione o Destino</option>
-                    {branches.map(b => (
+                    {branches.filter(b => b.status === 'active' && b.id !== 'outra' && b.id !== 'outras' && b.code !== 'outra').map(b => (
                       <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
                     ))}
                   </select>

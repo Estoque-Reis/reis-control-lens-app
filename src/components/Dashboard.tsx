@@ -82,14 +82,27 @@ export default function Dashboard() {
       }
       setWarnPercentage(loadedPercentage);
 
-      const branches = branchesSnap.docs.reduce((acc, doc) => ({ ...acc, [doc.id]: doc.data() }), {} as Record<string, any>);
+      const activeBranchesObj: Record<string, any> = {};
+      branchesSnap.docs.forEach(doc => {
+        const d = doc.data();
+        if (d.status === 'active' && doc.id !== 'outra' && doc.id !== 'outras' && d.code !== 'outra') {
+          activeBranchesObj[doc.id] = { id: doc.id, ...d };
+        }
+      });
+
+      const branches = activeBranchesObj;
       const families = familiesSnap.docs.reduce((acc, doc) => ({ ...acc, [doc.id]: { id: doc.id, ...doc.data() } }), {} as Record<string, any>);
       const skus = skusSnap.docs.reduce((acc, doc) => ({ ...acc, [doc.id]: { id: doc.id, ...doc.data() } }), {} as Record<string, any>);
-      const inventory = inventorySnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      
+      const inventory = inventorySnap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as any))
+        .filter(item => activeBranchesObj[item.branch_id] !== undefined);
+
       const pendingTransfersCount = transfersSnap.size;
 
       // 2. Movement Analytics
       const movements = movementsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any))
+        .filter(m => activeBranchesObj[m.branch_id] !== undefined)
         .sort((a, b) => {
           const dateA = a.created_at?.toMillis?.() || new Date(a.created_at).getTime() || 0;
           const dateB = b.created_at?.toMillis?.() || new Date(b.created_at).getTime() || 0;
