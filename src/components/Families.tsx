@@ -252,7 +252,7 @@ export default function LensFamilies() {
             for (let cilVal = 0; cilVal >= -200; cilVal -= 25) {
               const cil = cilVal / 100;
               const skuCode = generateSkuCode(family.line, esf, cil);
-              const skuId = `${family.id}_${skuCode.replace(/[^a-zA-Z0-9]/g, '_')}`;
+              const skuId = `${family.id}_${skuCode.replace(/\+/g, 'P').replace(/-/g, 'M').replace(/[^a-zA-Z0-9]/g, '_')}`;
               
               const skuRef = doc(db, 'lensSkus', skuId);
               batch.set(skuRef, {

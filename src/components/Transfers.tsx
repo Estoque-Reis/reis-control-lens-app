@@ -177,6 +177,11 @@ export default function Transfers() {
     setLoading(true);
     try {
       await runTransaction(db, async (transaction) => {
+        const qtyVal = Math.floor(Math.abs(Number(transfer.quantity)));
+        if (isNaN(qtyVal) || qtyVal <= 0) {
+          throw new Error("A quantidade de transferência é inválida.");
+        }
+
         const fromInvId = `${transfer.from_branch_id}_${transfer.sku_id}`;
         const toInvId = `${transfer.to_branch_id}_${transfer.sku_id}`;
         
@@ -187,31 +192,70 @@ export default function Transfers() {
         const fromSnap = await transaction.get(fromInvRef);
         const toSnap = await transaction.get(toInvRef);
 
-        if (!fromSnap.exists() || fromSnap.data().quantity < transfer.quantity) {
+        let currentFromQty = 0;
+        if (fromSnap.exists()) {
+          const rawQty = fromSnap.data().quantity;
+          currentFromQty = typeof rawQty === 'number' ? rawQty : (parseInt(String(rawQty || 0), 10) || 0);
+          if (isNaN(currentFromQty) || currentFromQty < 0) {
+            currentFromQty = 0;
+          }
+        }
+
+        if (currentFromQty < qtyVal) {
           throw new Error("Estoque insuficiente na filial de origem.");
+        }
+
+        let currentToQty = 0;
+        if (toSnap.exists()) {
+          const rawQty = toSnap.data().quantity;
+          currentToQty = typeof rawQty === 'number' ? rawQty : (parseInt(String(rawQty || 0), 10) || 0);
+          if (isNaN(currentToQty) || currentToQty < 0) {
+            currentToQty = 0;
+          }
         }
 
         // Subtract from Origin
         transaction.update(fromInvRef, {
-          quantity: fromSnap.data().quantity - transfer.quantity,
+          quantity: currentFromQty - qtyVal,
           updated_at: serverTimestamp()
         });
 
         // Add to Destination
-        if (toSnap.exists()) {
-          transaction.update(toInvRef, {
-            quantity: toSnap.data().quantity + transfer.quantity,
-            updated_at: serverTimestamp()
-          });
-        } else {
-          transaction.set(toInvRef, {
-            branch_id: transfer.to_branch_id,
-            sku_id: transfer.sku_id,
-            quantity: transfer.quantity,
-            updated_at: serverTimestamp(),
-            created_at: serverTimestamp()
-          });
-        }
+        transaction.set(toInvRef, {
+          branch_id: transfer.to_branch_id,
+          sku_id: transfer.sku_id,
+          quantity: currentToQty + qtyVal,
+          updated_at: serverTimestamp(),
+          created_at: toSnap.exists() ? (toSnap.data().created_at || serverTimestamp()) : serverTimestamp()
+        }, { merge: true });
+
+        // Find branch names for nice audit descriptions
+        const fromBranch = branches.find(b => b.id === transfer.from_branch_id);
+        const toBranch = branches.find(b => b.id === transfer.to_branch_id);
+
+        // Register transfer_out movement for origin branch
+        const movOutRef = doc(collection(db, 'movements'));
+        transaction.set(movOutRef, {
+          branch_id: transfer.from_branch_id,
+          sku_id: transfer.sku_id,
+          type: 'transfer_out',
+          quantity: qtyVal,
+          reason: `Transferência para ${toBranch?.name || transfer.to_branch_id} (${transfer.reason || 'Sem observações'})`,
+          user_id: auth.currentUser?.uid,
+          created_at: serverTimestamp()
+        });
+
+        // Register transfer_in movement for destination branch
+        const movInRef = doc(collection(db, 'movements'));
+        transaction.set(movInRef, {
+          branch_id: transfer.to_branch_id,
+          sku_id: transfer.sku_id,
+          type: 'transfer_in',
+          quantity: qtyVal,
+          reason: `Recebido de ${fromBranch?.name || transfer.from_branch_id} (${transfer.reason || 'Sem observações'})`,
+          user_id: auth.currentUser?.uid,
+          created_at: serverTimestamp()
+        });
 
         // Update transfer status
         transaction.update(transferRef, {

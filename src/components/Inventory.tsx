@@ -17,7 +17,7 @@ import {
   Settings,
   SlidersHorizontal
 } from 'lucide-react';
-import { db, auth, getCachedBranches, getCachedFamilies, getCachedSkus, clearCache } from '@/src/lib/firebase';
+import { db, auth, getCachedBranches, getCachedFamilies, getCachedSkus, clearCache, handleFirestoreError, OperationType } from '@/src/lib/firebase';
 import { collection, getDocs, query, where, doc, getDoc, runTransaction, serverTimestamp, setDoc, deleteDoc } from 'firebase/firestore';
 import { useAuth } from '@/src/hooks/useAuth';
 import { LensSku, InventoryItem, Branch, LensFamily } from '@/src/types';
@@ -446,9 +446,9 @@ export default function Inventory() {
       return;
     }
 
-    const qtyAmount = parseInt(newQty);
-    if (isNaN(qtyAmount) || qtyAmount < 0) {
-      alert("Por favor, insira uma quantidade válida.");
+    const qtyAmount = parseInt(String(newQty).trim(), 10);
+    if (isNaN(qtyAmount) || qtyAmount <= 0) {
+      alert("Por favor, insira uma quantidade inteira positiva válida maior que zero.");
       return;
     }
 
@@ -507,34 +507,53 @@ export default function Inventory() {
         if (!family) throw new Error("Família de lentes não encontrada.");
 
         const skuCode = generateSkuCode(family.line, esf, cil);
-        const skuId = `${family.id}_${skuCode.replace(/[^a-zA-Z0-9]/g, '_')}`;
-
-        // Create the document of SKU if it doesn't exist
-        const skuRef = doc(db, 'lensSkus', skuId);
-        await setDoc(skuRef, {
-          family_id: family.id,
-          sku_code: skuCode,
-          spherical: esf,
-          cylindrical: cil,
-          created_at: new Date().toISOString()
-        }, { merge: true });
-
-        finalSkuId = skuId;
+        finalSkuId = `${family.id}_${skuCode.replace(/\+/g, 'P').replace(/-/g, 'M').replace(/[^a-zA-Z0-9]/g, '_')}`;
       }
 
       const invId = `${newBranchId}_${finalSkuId}`;
       const invRef = doc(db, 'inventory', invId);
       
-      // Use transaction to load current quantity and add/subtract it
+      // Use transaction to load current quantity and add/subtract it atomically
       await runTransaction(db, async (transaction) => {
+        // If we need to create the SKU, do it atomically inside the transaction
+        if (newEntryMode !== 'sku') {
+          const family = families.find(f => f.id === newFamilyId);
+          if (family) {
+            const esf = parseFloat(newEsf);
+            const cil = parseFloat(newCil);
+            const skuCode = generateSkuCode(family.line, esf, cil);
+            const skuRef = doc(db, 'lensSkus', finalSkuId);
+            const skuDoc = await transaction.get(skuRef);
+            
+            if (!skuDoc.exists()) {
+              transaction.set(skuRef, {
+                family_id: family.id,
+                sku_code: skuCode,
+                spherical: esf,
+                cylindrical: cil,
+                created_at: serverTimestamp()
+              });
+            }
+          }
+        }
+
         const invDoc = await transaction.get(invRef);
         let currentQty = 0;
         if (invDoc.exists()) {
           const rawQty = invDoc.data().quantity;
-          currentQty = typeof rawQty === 'number' ? rawQty : (parseInt(String(rawQty || 0)) || 0);
+          currentQty = typeof rawQty === 'number' ? rawQty : (parseInt(String(rawQty || 0), 10) || 0);
+          if (isNaN(currentQty) || currentQty < 0) {
+            currentQty = 0;
+          }
         }
 
-        const qtyChange = newSkuModalMode === 'entry' ? qtyAmount : -qtyAmount;
+        // Rigorous positive integer validation within transaction
+        const cleanQty = Math.floor(Math.abs(Number(qtyAmount)));
+        if (isNaN(cleanQty) || cleanQty <= 0) {
+          throw new Error("Quantidade inválida para movimentação!");
+        }
+
+        const qtyChange = newSkuModalMode === 'entry' ? cleanQty : -cleanQty;
         const nextQty = currentQty + qtyChange;
 
         if (nextQty < 0) {
@@ -554,7 +573,7 @@ export default function Inventory() {
           branch_id: newBranchId,
           sku_id: finalSkuId,
           type: newSkuModalMode === 'entry' ? 'entry' : 'writeoff',
-          quantity: qtyAmount,
+          quantity: cleanQty,
           reason: newReason || (newSkuModalMode === 'entry' ? 'Nova entrada de lentes' : 'Baixa de estoque (ajuste)'),
           user_id: auth.currentUser?.uid,
           created_at: serverTimestamp()
@@ -602,7 +621,7 @@ export default function Inventory() {
       return;
     }
 
-    const amount = parseInt(qty);
+    const amount = parseInt(String(qty).trim(), 10);
     if (isNaN(amount) || amount <= 0) {
       alert("Por favor, insira uma quantidade válida maior que 0.");
       return;
@@ -637,52 +656,67 @@ export default function Inventory() {
     }
 
     setMovementLoading(true);
-    const finalQty = showModal === 'entry' ? amount : -amount;
 
     try {
       let finalSkuId = selectedItem.sku_id;
+      let isVirtualCreate = false;
+      let virtualFamily: any = null;
+      let virtualEsf = 0;
+      let virtualCyl = 0;
+      let virtualSkuCode = '';
 
-      // Se o item for virtual e o SKU ID também for virtual, criamos o SKU na hora!
       if (selectedItem.isVirtual && selectedItem.sku_id.startsWith('virtual_sku_')) {
-        const family = selectedItem.sku?.family;
-        if (!family) throw new Error("Família de lentes não encontrada para o item virtual.");
-        
-        const esf = selectedItem.sku.spherical;
-        const cil = selectedItem.sku.cylindrical;
-        
-        const skuCode = generateSkuCode(family.line, esf, cil);
-        const skuId = `${family.id}_${skuCode.replace(/[^a-zA-Z0-9]/g, '_')}`;
-        
-        // Criar o documento do SKU primeiro
-        const skuRef = doc(db, 'lensSkus', skuId);
-        await setDoc(skuRef, {
-          family_id: family.id,
-          sku_code: skuCode,
-          spherical: esf,
-          cylindrical: cil,
-          created_at: new Date().toISOString()
-        }, { merge: true });
-
-        finalSkuId = skuId;
-        // Clear lensSku cache
-        clearCache('lensSkus');
-        fetchAllSkus(true);
+        isVirtualCreate = true;
+        virtualFamily = selectedItem.sku?.family;
+        if (!virtualFamily) throw new Error("Família de lentes não encontrada para o item virtual.");
+        virtualEsf = selectedItem.sku.spherical;
+        virtualCyl = selectedItem.sku.cylindrical;
+        virtualSkuCode = generateSkuCode(virtualFamily.line, virtualEsf, virtualCyl);
+        finalSkuId = `${virtualFamily.id}_${virtualSkuCode.replace(/\+/g, 'P').replace(/-/g, 'M').replace(/[^a-zA-Z0-9]/g, '_')}`;
       }
 
       const finalItemId = `${targetBranchId}_${finalSkuId}`;
 
       await runTransaction(db, async (transaction) => {
+        // Create lensSkus document atomically if virtual SKU is being resolved
+        if (isVirtualCreate && virtualFamily) {
+          const skuRef = doc(db, 'lensSkus', finalSkuId);
+          const skuDoc = await transaction.get(skuRef);
+          if (!skuDoc.exists()) {
+            transaction.set(skuRef, {
+              family_id: virtualFamily.id,
+              sku_code: virtualSkuCode,
+              spherical: virtualEsf,
+              cylindrical: virtualCyl,
+              created_at: serverTimestamp()
+            });
+          }
+        }
+
         const invRef = doc(db, 'inventory', finalItemId);
         const invDoc = await transaction.get(invRef);
         
         let currentQty = 0;
         if (invDoc.exists()) {
           const rawQty = invDoc.data().quantity;
-          currentQty = typeof rawQty === 'number' ? rawQty : (parseInt(String(rawQty || 0)) || 0);
+          currentQty = typeof rawQty === 'number' ? rawQty : (parseInt(String(rawQty || 0), 10) || 0);
+          if (isNaN(currentQty) || currentQty < 0) {
+            currentQty = 0;
+          }
         }
 
+        // Rigorous positive integer validation within transaction
+        const cleanQty = Math.floor(Math.abs(Number(amount)));
+        if (isNaN(cleanQty) || cleanQty <= 0) {
+          throw new Error("Quantidade inválida para movimentação!");
+        }
+
+        const finalQty = showModal === 'entry' ? cleanQty : -cleanQty;
         const newQty = currentQty + finalQty;
-        if (newQty < 0) throw new Error("Estoque insuficiente!");
+
+        if (newQty < 0) {
+          throw new Error("Estoque insuficiente para realizar a baixa desejada!");
+        }
 
         // Update inventory (creates document if doesn't exist yet via set with merge)
         transaction.set(invRef, {
@@ -698,7 +732,7 @@ export default function Inventory() {
           branch_id: targetBranchId,
           sku_id: finalSkuId,
           type: showModal === 'entry' ? 'entry' : (showModal === 'writeoff' ? 'writeoff' : 'exit'),
-          quantity: amount,
+          quantity: cleanQty,
           reason: reason || (showModal === 'entry' ? 'Entrada manual' : (showModal === 'writeoff' ? 'Baixa de estoque' : 'Saída manual')),
           user_id: auth.currentUser?.uid,
           created_at: serverTimestamp()
