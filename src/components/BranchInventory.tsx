@@ -1072,8 +1072,10 @@ export default function BranchInventory() {
             {displayedSkusList.length === 1 ? '1 resultado encontrado' : `${displayedSkusList.length} resultados encontrados`}
           </span>
           {(appliedEsfFilter || appliedCilFilter) && (
-            <span className="px-2.5 py-0.5 text-[10px] font-black bg-teal-50 text-teal-700 border border-teal-100 rounded-full flex items-center gap-1.5">
-              Filtro: ESF {appliedEsfSign}{appliedEsfFilter || '0,00'} • CIL -{appliedCilFilter || '0,00'}
+            <span className="px-2.5 py-0.5 text-[10px] font-black bg-teal-50 text-teal-700 border border-teal-100 rounded-full flex items-center gap-1.5 font-sans">
+              Filtro: {appliedEsfFilter ? `ESF ${appliedEsfSign}${appliedEsfFilter}` : ''}
+              {appliedEsfFilter && appliedCilFilter ? ' • ' : ''}
+              {appliedCilFilter ? `CIL -${appliedCilFilter}` : ''}
               <button onClick={handleClearDioptres} className="hover:text-rose-600 transition-colors cursor-pointer p-0.5 hover:bg-rose-50 rounded" title="Limpar Filtro">
                 <X size={10} strokeWidth={3} />
               </button>

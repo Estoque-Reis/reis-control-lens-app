@@ -180,51 +180,63 @@ export default function Inventory() {
     fetchGridConfig();
   }, []);
 
-  const applyDirectFilter = (esfValue: string, esfSignVal: string, cilValue: string) => {
-    let formattedEsf = esfValue.trim();
-    let currentEsfSign = esfSignVal;
-    if (formattedEsf) {
-      if (formattedEsf.startsWith('-')) {
-        currentEsfSign = '-';
-        formattedEsf = formattedEsf.substring(1).trim();
-      } else if (formattedEsf.startsWith('+')) {
-        currentEsfSign = '+';
-        formattedEsf = formattedEsf.substring(1).trim();
+  const applyDirectFilter = (esfValue?: string, esfSignVal?: '+' | '-', cilValue?: string) => {
+    setRefSearch(prev => {
+      let formattedEsf = esfValue !== undefined ? esfValue.trim() : prev.esf;
+      let currentEsfSign = esfSignVal !== undefined ? esfSignVal : esfSign;
+      
+      if (esfValue !== undefined && formattedEsf) {
+        if (formattedEsf.startsWith('-')) {
+          currentEsfSign = '-';
+          formattedEsf = formattedEsf.substring(1).trim();
+        } else if (formattedEsf.startsWith('+')) {
+          currentEsfSign = '+';
+          formattedEsf = formattedEsf.substring(1).trim();
+        }
+        let num = parseFloat(formattedEsf.replace(',', '.')) || 0;
+        if (num < 0) {
+          currentEsfSign = '-';
+          num = Math.abs(num);
+        }
+        if (num > 6.0) num = 6.0;
+        num = Math.round(num * 4) / 4;
+        formattedEsf = num.toFixed(2).replace('.', ',');
       }
-      let num = parseFloat(formattedEsf.replace(',', '.')) || 0;
-      if (num < 0) {
-        currentEsfSign = '-';
-        num = Math.abs(num);
-      }
-      if (num > 6.0) num = 6.0;
-      num = Math.round(num * 4) / 4;
-      formattedEsf = num.toFixed(2).replace('.', ',');
-    }
 
-    let formattedCil = cilValue.trim();
-    if (formattedCil) {
-      if (formattedCil.startsWith('-') || formattedCil.startsWith('+')) {
-        formattedCil = formattedCil.substring(1).trim();
+      let formattedCil = cilValue !== undefined ? cilValue.trim() : prev.cil;
+      if (cilValue !== undefined && formattedCil) {
+        if (formattedCil.startsWith('-') || formattedCil.startsWith('+')) {
+          formattedCil = formattedCil.substring(1).trim();
+        }
+        let num = parseFloat(formattedCil.replace(',', '.')) || 0;
+        num = Math.abs(num); // cylindrical magnitude is positive in input but visualized as negative
+        if (num > 4.0) num = 4.0;
+        num = Math.round(num * 4) / 4;
+        formattedCil = num.toFixed(2).replace('.', ',');
       }
-      let num = parseFloat(formattedCil.replace(',', '.')) || 0;
-      num = Math.abs(num); // cylindrical magnitude is positive in input but visualized as negative
-      if (num > 4.0) num = 4.0;
-      num = Math.round(num * 4) / 4;
-      formattedCil = num.toFixed(2).replace('.', ',');
-    }
 
-    setEsfSign(currentEsfSign);
-    setRefSearch({ esf: formattedEsf, cil: formattedCil });
-    setAppliedRefSearch({
-      esf: formattedEsf,
-      cil: formattedCil,
-      esfSign: currentEsfSign
+      setAppliedRefSearch({
+        esf: formattedEsf,
+        cil: formattedCil,
+        esfSign: currentEsfSign
+      });
+      setIsFilterActive(!!formattedEsf || !!formattedCil);
+      setEsfSign(currentEsfSign);
+
+      return { esf: formattedEsf, cil: formattedCil };
     });
-    setIsFilterActive(!!formattedEsf || !!formattedCil);
   };
 
   const handleApplyFilter = () => {
-    applyDirectFilter(refSearch.esf, esfSign, refSearch.cil);
+    setRefSearch(prev => {
+      setAppliedRefSearch({
+        esf: prev.esf,
+        cil: prev.cil,
+        esfSign: esfSign
+      });
+      setIsFilterActive(!!prev.esf || !!prev.cil);
+      return prev;
+    });
   };
 
   const handleClearFilter = () => {
@@ -1083,12 +1095,12 @@ export default function Inventory() {
                   onChange={(e) => {
                     const val = e.target.value;
                     if (!val) {
-                      applyDirectFilter('', '+', refSearch.cil);
+                      applyDirectFilter('', '+', undefined);
                     } else {
                       const parsed = parseFloat(val);
                       const absValStr = Math.abs(parsed).toFixed(2).replace('.', ',');
                       const sign = parsed < 0 ? '-' : '+';
-                      applyDirectFilter(absValStr, sign, refSearch.cil);
+                      applyDirectFilter(absValStr, sign, undefined);
                     }
                   }}
                   className="w-full h-full text-center text-sm sm:text-base font-black text-slate-800 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-4 pr-10 transition-all cursor-pointer appearance-none"
@@ -1110,7 +1122,7 @@ export default function Inventory() {
                 <div className="flex items-center h-full shrink-0 pr-1 border-l border-slate-100 bg-slate-50/70">
                   <button 
                     onClick={() => {
-                      applyDirectFilter('', '+', refSearch.cil);
+                      applyDirectFilter('', '+', undefined);
                     }}
                     className="p-1 px-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-lg transition-all border-none outline-none focus:ring-0 cursor-pointer mr-1"
                     title="Limpar"
@@ -1132,11 +1144,11 @@ export default function Inventory() {
                   onChange={(e) => {
                     const val = e.target.value;
                     if (!val) {
-                      applyDirectFilter(refSearch.esf, esfSign, '');
+                      applyDirectFilter(undefined, undefined, '');
                     } else {
                       const parsed = parseFloat(val);
                       const absValStr = Math.abs(parsed).toFixed(2).replace('.', ',');
-                      applyDirectFilter(refSearch.esf, esfSign, absValStr);
+                      applyDirectFilter(undefined, undefined, absValStr);
                     }
                   }}
                   className="w-full h-full text-center text-sm sm:text-base font-black text-slate-800 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-4 pr-10 transition-all cursor-pointer appearance-none"
@@ -1158,7 +1170,7 @@ export default function Inventory() {
                 <div className="flex items-center h-full shrink-0 pr-1 border-l border-slate-100 bg-slate-50/70">
                   <button 
                     onClick={() => {
-                      applyDirectFilter(refSearch.esf, esfSign, '');
+                      applyDirectFilter(undefined, undefined, '');
                     }}
                     className="p-1 px-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-lg transition-all border-none outline-none focus:ring-0 cursor-pointer mr-1"
                     title="Limpar"
@@ -1218,7 +1230,9 @@ export default function Inventory() {
           </span>
           {isFilterActive && (
             <span className="px-2.5 py-0.5 text-[10px] font-black bg-teal-50 text-teal-700 border border-teal-100 rounded-full flex items-center gap-1.5">
-              Filtro: ESF {appliedRefSearch.esfSign}{appliedRefSearch.esf || '0,00'} • CIL -{appliedRefSearch.cil || '0,00'}
+              Filtro: {appliedRefSearch.esf ? `ESF ${appliedRefSearch.esfSign}${appliedRefSearch.esf}` : ''}
+              {appliedRefSearch.esf && appliedRefSearch.cil ? ' • ' : ''}
+              {appliedRefSearch.cil ? `CIL -${appliedRefSearch.cil}` : ''}
               <button onClick={handleClearFilter} className="hover:text-rose-600 transition-colors cursor-pointer p-0.5 hover:bg-rose-50 rounded" title="Limpar Filtro">
                 <X size={10} strokeWidth={3} />
               </button>
