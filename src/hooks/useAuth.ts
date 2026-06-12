@@ -28,16 +28,13 @@ export function useAuth() {
           (docSnap) => {
             if (docSnap.exists()) {
               const data = docSnap.data();
-              const isGoogle = firebaseUser.providerData.some(p => p.providerId === 'google.com');
-              const isMaster = !isGoogle && (
-                (firebaseUser.email && firebaseUser.email.toLowerCase() === 'paulo_ricardo_reis@hotmail.com') ||
-                (data.email && data.email.toLowerCase() === 'paulo_ricardo_reis@hotmail.com')
-              );
+              const isMaster = (firebaseUser.email && firebaseUser.email.toLowerCase() === 'paulo_ricardo_reis@hotmail.com') ||
+                (data.email && data.email.toLowerCase() === 'paulo_ricardo_reis@hotmail.com');
               
               setProfile({
                 id: docSnap.id,
                 ...data,
-                role: isMaster ? 'admin' : (data.role || 'consultor')
+                role: isMaster ? 'admin' : (data.role || 'visitante')
               } as Profile);
             } else {
               setProfile(null);

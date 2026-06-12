@@ -50,13 +50,13 @@ service cloud.firestore {
       function isValidProfile(data) {
         return data.keys().hasAll(['email', 'role', 'status']) &&
                data.email is string &&
-               data.role in ['admin', 'consultor'] &&
+               data.role in ['admin', 'consultor', 'visitante'] &&
                data.status in ['active', 'inactive'] &&
                (!('theme' in data) || data.theme in ['light', 'dark']);
       }
 
       allow create: if isSignedIn() && (
-                      (request.auth.uid == userId && (incoming().role == 'consultor' || isMasterUser())) || 
+                      (request.auth.uid == userId && (incoming().role in ['consultor', 'visitante'] || isMasterUser())) || 
                       isAdmin()
                     ) && isValidProfile(incoming()); 
 

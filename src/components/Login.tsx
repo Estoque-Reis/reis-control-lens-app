@@ -22,11 +22,12 @@ export default function Login() {
     setLoading(true);
     setError(null);
 
-    const emailId = email ? email.replace(/[^a-zA-Z0-9]/g, '_') : '';
+    const normalizedEmail = email ? email.toLowerCase().trim() : '';
+    const emailId = normalizedEmail.replace(/[^a-zA-Z0-9]/g, '_');
 
     try {
       if (isSignUp) {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
         const firebaseUser = userCredential.user;
         
         if (firebaseUser) {
@@ -45,13 +46,13 @@ export default function Login() {
             }
           }
 
-          const isMaster = email.toLowerCase() === ALLOWED_EMAIL.toLowerCase();
-          const finalRole = isMaster ? 'admin' : (preProfileData.role || 'consultor');
+          const isMaster = normalizedEmail === ALLOWED_EMAIL.toLowerCase();
+          const finalRole = isMaster ? 'admin' : (preProfileData.role || 'visitante');
 
           try {
             await setDoc(doc(db, 'profiles', firebaseUser.uid), {
               full_name: preProfileData.full_name || email.split('@')[0],
-              email: email,
+              email: normalizedEmail,
               role: finalRole,
               status: preProfileData.status || 'active',
               branch_id: preProfileData.branch_id || '',
@@ -65,13 +66,13 @@ export default function Login() {
           setIsSignUp(false);
         }
       } else {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
         const firebaseUser = userCredential.user;
         
         if (firebaseUser) {
           const docRef = doc(db, 'profiles', firebaseUser.uid);
           const docSnap = await getDoc(docRef);
-          const isMasterUser = firebaseUser.email?.toLowerCase() === ALLOWED_EMAIL.toLowerCase();
+          const isMasterUser = firebaseUser.email?.toLowerCase() === ALLOWED_EMAIL.toLowerCase() || normalizedEmail === ALLOWED_EMAIL.toLowerCase();
           
           // Auto-migrate or initialize profile if not already configured in actual UID path
           if (!docSnap.exists() || isMasterUser) {
@@ -87,12 +88,12 @@ export default function Login() {
               }
             }
 
-            const finalRole = isMasterUser ? 'admin' : (preProfileData.role || 'consultor');
+            const finalRole = isMasterUser ? 'admin' : (preProfileData.role || 'visitante');
 
             try {
               await setDoc(docRef, {
                 full_name: preProfileData.full_name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuário',
-                email: firebaseUser.email ?? email,
+                email: firebaseUser.email?.toLowerCase() ?? normalizedEmail,
                 role: finalRole,
                 status: preProfileData.status || 'active',
                 branch_id: preProfileData.branch_id || '',

@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'consultor';
+export type UserRole = 'admin' | 'consultor' | 'visitante';
 export type UserStatus = 'active' | 'inactive';
 export type MovementType = 'entry' | 'exit' | 'transfer_in' | 'transfer_out' | 'adjustment';
 export type TransferStatus = 'pending' | 'approved' | 'rejected' | 'completed';

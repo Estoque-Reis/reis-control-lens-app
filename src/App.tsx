@@ -14,7 +14,7 @@ import ReportsFamily from '@/src/components/ReportsFamily';
 import Transfers from '@/src/components/Transfers';
 import BranchInventory from '@/src/components/BranchInventory';
 import PurchaseSuggestions from '@/src/components/PurchaseSuggestions';
-import { Users as UsersIcon, LogOut } from 'lucide-react';
+import { Users as UsersIcon, LogOut, Shield } from 'lucide-react';
 
 // Simple navigation
 type AppRoute = 
@@ -27,7 +27,8 @@ type AppRoute =
   | 'users' 
   | 'families' 
   | 'reports'
-  | 'reports_family';
+  | 'reports_family'
+  | 'pending_access';
 
 export default function App() {
   const { user, profile, loading } = useAuth();
@@ -121,6 +122,37 @@ export default function App() {
           </button>
         </div>
       </div>
+    );
+  }
+
+  if (profile.role === 'visitante') {
+    return (
+      <Layout 
+        currentRoute="pending_access" 
+        onNavigate={setCurrentRoute}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
+      >
+        <div className="flex items-center justify-center min-h-[60vh] p-6">
+          <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-3xl shadow-xl p-10 text-center border border-slate-100 dark:border-slate-800">
+            <div className="w-16 h-16 bg-amber-50 dark:bg-amber-950/30 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Shield size={32} />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-850 dark:text-slate-100 mb-3">Acesso Pendente</h2>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-6 leading-relaxed">
+              Olá, <strong className="text-slate-700 dark:text-slate-200">{profile.full_name || profile.email?.split('@')[0]}</strong>! Seu perfil está ativo com a função de <strong className="text-amber-500 uppercase">VISITANTE</strong>.
+            </p>
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-5 mb-8 text-left border border-slate-100 dark:border-slate-800">
+              <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed">
+                ℹ️ Por questões de segurança, novas contas começam como <strong>visitantes</strong>. Aguarde que o <strong>Administrador do sistema</strong> conceda as permissões necessárias e associe seu perfil à sua filial.
+              </p>
+            </div>
+            <p className="text-xs text-slate-400">
+              Entre em contato com o administrador Paulo para liberar o acesso.
+            </p>
+          </div>
+        </div>
+      </Layout>
     );
   }
 

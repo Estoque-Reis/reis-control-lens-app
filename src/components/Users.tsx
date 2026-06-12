@@ -18,7 +18,7 @@ export default function UsersList() {
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
-    role: 'consultor' as 'admin' | 'consultor',
+    role: 'visitante' as 'admin' | 'consultor' | 'visitante',
     branch_id: '',
     status: 'active' as 'active' | 'inactive'
   });
@@ -72,7 +72,7 @@ export default function UsersList() {
       setFormData({
         full_name: user.full_name || '',
         email: user.email || '',
-        role: user.role || 'consultor',
+        role: user.role || 'visitante',
         branch_id: user.branch_id || '',
         status: user.status || 'active'
       });
@@ -81,7 +81,7 @@ export default function UsersList() {
       setFormData({
         full_name: '',
         email: '',
-        role: 'consultor',
+        role: 'visitante',
         branch_id: '',
         status: 'active'
       });
@@ -97,11 +97,12 @@ export default function UsersList() {
 
     setSaving(true);
     try {
-      const isMaster = formData.email.toLowerCase() === 'paulo_ricardo_reis@hotmail.com';
+      const isMaster = formData.email.toLowerCase().trim() === 'paulo_ricardo_reis@hotmail.com';
       const finalRole = isMaster ? 'admin' : formData.role;
       const savedData = {
         ...formData,
-        role: finalRole as 'admin' | 'consultor'
+        email: formData.email.toLowerCase().trim(),
+        role: finalRole as 'admin' | 'consultor' | 'visitante'
       };
 
       if (editingUser) {
@@ -113,7 +114,7 @@ export default function UsersList() {
       } else {
         // Warning: this doesn't create a Firebase Auth user
         // But it allows pre-creating profiles
-        const id = formData.email.replace(/[^a-zA-Z0-9]/g, '_');
+        const id = formData.email.toLowerCase().trim().replace(/[^a-zA-Z0-9]/g, '_');
         await setDoc(doc(db, 'profiles', id), {
           ...savedData,
           created_at: new Date().toISOString()
@@ -202,7 +203,9 @@ export default function UsersList() {
                 <td className="px-6 py-4">
                   <div className="flex items-center text-sm font-medium text-slate-600">
                     <Shield size={14} className="mr-2 text-brand-teal" />
-                    <span className="capitalize">{user.role}</span>
+                    <span>
+                      {user.role === 'admin' ? 'Administrador' : user.role === 'consultor' ? 'Consultor' : 'Visitante'}
+                    </span>
                   </div>
                 </td>
                 <td className="px-6 py-4">
@@ -292,10 +295,11 @@ export default function UsersList() {
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Perfil de Acesso</label>
                   <select 
                     value={formData.role}
-                    onChange={(e) => setFormData({...formData, role: e.target.value as 'admin' | 'consultor'})}
+                    onChange={(e) => setFormData({...formData, role: e.target.value as 'admin' | 'consultor' | 'visitante'})}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal text-sm"
                   >
-                    <option value="consultor">Visualizador (Vendedor)</option>
+                    <option value="visitante">Visitante (Acesso Pendente)</option>
+                    <option value="consultor">Consultor (Consulta de Estoque)</option>
                     <option value="admin">Administrador</option>
                   </select>
                 </div>

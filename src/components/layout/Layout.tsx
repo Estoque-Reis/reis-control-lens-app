@@ -147,7 +147,7 @@ export default function Layout({ children, currentRoute, onNavigate, theme, onTo
     subItems?: SubMenuItem[];
   }
 
-  const resolvedRole = profile?.role === 'admin' ? 'admin' : 'consultor';
+  const resolvedRole = profile?.role === 'admin' ? 'admin' : (profile?.role === 'consultor' ? 'consultor' : 'visitante');
   const isAdmin = resolvedRole === 'admin';
 
   const menuItems: MenuItem[] = [
