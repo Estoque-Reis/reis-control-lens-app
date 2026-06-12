@@ -132,6 +132,7 @@ export default function App() {
         onNavigate={setCurrentRoute}
         theme={theme}
         onToggleTheme={handleToggleTheme}
+        profile={profile}
       >
         <div className="flex items-center justify-center min-h-[60vh] p-6">
           <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-3xl shadow-xl p-10 text-center border border-slate-100 dark:border-slate-800">
@@ -198,6 +199,7 @@ export default function App() {
       onNavigate={setCurrentRoute}
       theme={theme}
       onToggleTheme={handleToggleTheme}
+      profile={profile}
     >
       {renderContent()}
     </Layout>

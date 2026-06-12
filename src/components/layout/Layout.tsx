@@ -24,9 +24,9 @@ import {
   Moon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useAuth } from '@/src/hooks/useAuth';
 import { auth } from '@/src/lib/firebase';
 import { cn } from '@/src/lib/utils';
+import { Profile } from '@/src/types';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -34,10 +34,10 @@ interface LayoutProps {
   onNavigate: (route: any) => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
+  profile: Profile | null;
 }
 
-export default function Layout({ children, currentRoute, onNavigate, theme, onToggleTheme }: LayoutProps) {
-  const { profile } = useAuth();
+export default function Layout({ children, currentRoute, onNavigate, theme, onToggleTheme, profile }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
