@@ -491,6 +491,12 @@ export default function Inventory() {
         const esf = parseFloat(newEsf);
         const cil = parseFloat(newCil);
 
+        if (isNaN(esf) || isNaN(cil) || typeof esf !== 'number' || typeof cil !== 'number') {
+          alert("Erro: Valores de dioptrias inválidos.");
+          setMovementLoading(false);
+          return;
+        }
+
         if (esf < gridConfig.esf_min || esf > gridConfig.esf_max) {
           alert(`Erro: A dioptria esférica (ESF: ${esf >= 0 ? '+' : ''}${esf.toFixed(2)}) está fora dos limites configurados (${gridConfig.esf_min >= 0 ? '+' : ''}${gridConfig.esf_min.toFixed(2)} a ${gridConfig.esf_max >= 0 ? '+' : ''}${gridConfig.esf_max.toFixed(2)}).`);
           setMovementLoading(false);
@@ -644,6 +650,11 @@ export default function Inventory() {
     // Validar limites das dioptrias do SKU selecionado contra configurações globais
     const esf = selectedItem.sku?.spherical !== undefined ? parseFloat(String(selectedItem.sku.spherical)) : 0;
     const cil = selectedItem.sku?.cylindrical !== undefined ? parseFloat(String(selectedItem.sku.cylindrical)) : 0;
+
+    if (isNaN(esf) || isNaN(cil)) {
+      alert("Erro: Dioptrias do item selecionado possuem formato numérico inválido.");
+      return;
+    }
 
     if (esf < gridConfig.esf_min || esf > gridConfig.esf_max) {
       alert(`Erro: A dioptria esférica (ESF: ${esf >= 0 ? '+' : ''}${esf.toFixed(2)}) do item está fora dos limites configurados (${gridConfig.esf_min >= 0 ? '+' : ''}${gridConfig.esf_min.toFixed(2)} a ${gridConfig.esf_max >= 0 ? '+' : ''}${gridConfig.esf_max.toFixed(2)}).`);
@@ -1243,7 +1254,12 @@ export default function Inventory() {
               Lista
             </button>
             <button 
-              onClick={() => setViewMode('grid')}
+              onClick={() => {
+                setViewMode('grid');
+                if (!selectedFamily && families.length > 0) {
+                  setSelectedFamily(families[0].id);
+                }
+              }}
               className={cn(
                 "flex-1 h-full py-1.5 text-xs font-bold rounded-lg flex items-center justify-center transition-all cursor-pointer",
                 viewMode === 'grid' ? "bg-white shadow-sm text-brand-teal font-extrabold" : "text-slate-400 hover:text-slate-600"
@@ -1421,6 +1437,26 @@ export default function Inventory() {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      ) : !selectedFamily ? (
+        <div className="bg-white p-12 text-center rounded-2xl border border-slate-100 shadow-sm col-span-12">
+          <SlidersHorizontal className="text-slate-350 mx-auto mb-4" size={48} />
+          <h4 className="font-extrabold text-slate-750 text-base">Selecione uma Família de Lentes</h4>
+          <p className="text-slate-400 text-xs mt-2 max-w-sm mx-auto leading-relaxed">
+            Para visualizar a grade de dioptrias de forma individual (sem conflito de estoque), escolha uma Família de Lentes na barra de filtros superior ou selecione um atalho rápido abaixo:
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
+            {families.slice(0, 5).map(f => (
+              <button
+                key={f.id}
+                onClick={() => setSelectedFamily(f.id)}
+                type="button"
+                className="px-3.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl border border-slate-200 transition-all cursor-pointer"
+              >
+                {f.manufacturer} - {f.line}
+              </button>
+            ))}
           </div>
         </div>
       ) : (

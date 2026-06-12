@@ -236,9 +236,13 @@ export default function LensFamilies() {
         setConfirmModal(null);
         setGeneratingGridId(family.id);
         try {
-          // 1. Buscar todas as filiais existentes
-          const branchesSnapshot = await getDocs(collection(db, 'branches'));
+          // 1. Buscar todas as filiais existentes e inventário atual para evitar sobrescrever estoque real com zero
+          const [branchesSnapshot, inventorySnapshot] = await Promise.all([
+            getDocs(collection(db, 'branches')),
+            getDocs(collection(db, 'inventory'))
+          ]);
           const activeBranches = branchesSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+          const existingInventoryIds = new Set(inventorySnapshot.docs.map(d => d.id));
 
           let batch = writeBatch(db);
           let count = 0;
@@ -266,16 +270,18 @@ export default function LensFamilies() {
               count++;
               totalSkus++;
               
-              // Para cada SKU, cria entrada zerada na inventory para cada filial
+              // Para cada SKU, cria entrada zerada na inventory para cada filial caso não exista estoque anterior
               for (const branch of activeBranches) {
                 const invId = `${branch.id}_${skuId}`;
-                const invRef = doc(db, 'inventory', invId);
-                batch.set(invRef, {
-                  branch_id: branch.id,
-                  sku_id: skuId,
-                  quantity: 0,
-                  updated_at: new Date().toISOString()
-                }, { merge: true });
+                if (!existingInventoryIds.has(invId)) {
+                  const invRef = doc(db, 'inventory', invId);
+                  batch.set(invRef, {
+                    branch_id: branch.id,
+                    sku_id: skuId,
+                    quantity: 0,
+                    updated_at: new Date().toISOString()
+                  }, { merge: true });
+                }
                 
                 count++;
                 totalInv++;

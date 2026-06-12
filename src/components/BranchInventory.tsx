@@ -1099,7 +1099,12 @@ export default function BranchInventory() {
             </button>
             <button 
               type="button"
-              onClick={() => setViewMode('grid')}
+              onClick={() => {
+                setViewMode('grid');
+                if (!selectedLine && lines.length > 0) {
+                  setSelectedLine(lines[0]);
+                }
+              }}
               className={cn(
                 "flex-1 h-full text-[11px] font-bold rounded-md flex items-center justify-center transition-all cursor-pointer border-none outline-none focus:ring-0",
                 viewMode === 'grid' ? "bg-white shadow-xs text-brand-teal font-extrabold" : "text-slate-500 hover:text-slate-700"
@@ -1219,6 +1224,26 @@ export default function BranchInventory() {
                   ))}
                 </tbody>
               </table>
+            ) : !selectedLine ? (
+              <div className="bg-white p-12 text-center rounded-2xl border border-slate-100 shadow-sm">
+                <SlidersHorizontal className="text-slate-350 mx-auto mb-4" size={48} />
+                <h4 className="font-extrabold text-slate-750 text-base">Selecione uma Linha de Lentes</h4>
+                <p className="text-slate-400 text-xs mt-2 max-w-sm mx-auto leading-relaxed">
+                  Para visualizar a grade de dioptrias de forma individual (sem conflito de estoque), escolha uma Linha de Lentes na barra de filtros superior ou selecione um atalho rápido abaixo:
+                </p>
+                <div className="mt-6 flex flex-wrap justify-center gap-2">
+                  {lines.slice(0, 5).map(l => (
+                    <button
+                      key={l}
+                      onClick={() => setSelectedLine(l)}
+                      type="button"
+                      className="px-3.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl border border-slate-200 transition-all cursor-pointer"
+                    >
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
             ) : (
               <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                 <div className="overflow-x-auto p-6">

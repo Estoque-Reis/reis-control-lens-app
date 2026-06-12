@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer, collection, getDocs } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer, collection, getDocs, runTransaction, Transaction } from 'firebase/firestore';
 import firebaseConfig from '@/firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
@@ -90,6 +90,22 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
+}
+
+/**
+ * Global utility to force atomic transactions on Firestore operations.
+ * Prevents race conditions and ensures consistency, especially during stock updates.
+ */
+export async function executeTransaction<T>(
+  action: (transaction: Transaction) => Promise<T>,
+  pathContextForError = 'transaction'
+): Promise<T> {
+  try {
+    return await runTransaction(db, action);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, pathContextForError);
+    throw error;
+  }
 }
 
 // Test connection
