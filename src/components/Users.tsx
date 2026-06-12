@@ -46,12 +46,33 @@ export default function UsersList() {
         getDocs(collection(db, 'profiles')),
         getCachedBranches()
       ]);
-      const profiles = profileSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      const rawProfiles = profileSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
       const branchesMap: Record<string, any> = {};
       branchesList.forEach(b => {
         branchesMap[b.id] = b;
       });
+
+      // Deduplicate profiles by email, favoring the active (UID-based) ones over pre-registered ones
+      const uniqueProfilesMap = new Map<string, any>();
+      rawProfiles.forEach((p: any) => {
+        if (!p.email) return;
+        const normalizedEmail = p.email.toLowerCase().trim();
+        const emailIdAsDocName = normalizedEmail.replace(/[^a-zA-Z0-9]/g, '_');
+        const isEmailDerivedId = p.id === emailIdAsDocName;
+
+        const existing = uniqueProfilesMap.get(normalizedEmail);
+        if (!existing) {
+          uniqueProfilesMap.set(normalizedEmail, p);
+        } else {
+          const existingIsEmailDerived = existing.id === existing.email?.toLowerCase().trim().replace(/[^a-zA-Z0-9]/g, '_');
+          // If the existing one is pre-registered (email-derived) and the new one is active (UID), replace it!
+          if (existingIsEmailDerived && !isEmailDerivedId) {
+            uniqueProfilesMap.set(normalizedEmail, p);
+          }
+        }
+      });
+      const profiles = Array.from(uniqueProfilesMap.values());
 
       const joinedData = profiles.map((p: any) => ({
         ...p,

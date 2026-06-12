@@ -420,7 +420,7 @@ export default function LensFamilies() {
                   <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Custo Unitário</p>
                   <p className="text-xs font-bold text-slate-600 mb-2">{formatCurrency(family.cost_price)}</p>
                   <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Estoque Mín.</p>
-                  <p className="text-sm font-bold text-slate-700">{family.min_stock_per_sku} unid.</p>
+                  <p className="text-sm font-bold text-slate-700">{family.min_stock_per_sku} unidades</p>
                 </div>
               </div>
             </motion.div>

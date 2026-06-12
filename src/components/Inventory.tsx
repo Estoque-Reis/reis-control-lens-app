@@ -24,6 +24,31 @@ import { LensSku, InventoryItem, Branch, LensFamily } from '@/src/types';
 import { cn, formatRefraction, formatCylinder, generateSkuCode } from '@/src/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
+function formatUpdateDate(updatedAt: any): string {
+  if (!updatedAt) return '---';
+  try {
+    // If it has seconds property (like a Firestore Timestamp object)
+    if (updatedAt && typeof updatedAt === 'object' && typeof updatedAt.toDate === 'function') {
+      return updatedAt.toDate().toLocaleDateString('pt-BR');
+    }
+    if (updatedAt && typeof updatedAt === 'object' && typeof updatedAt.seconds === 'number') {
+      return new Date(updatedAt.seconds * 1000).toLocaleDateString('pt-BR');
+    }
+    // If it is already a Date object
+    if (updatedAt instanceof Date) {
+      return updatedAt.toLocaleDateString('pt-BR');
+    }
+    // Try constructing Date
+    const d = new Date(updatedAt);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString('pt-BR');
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  return '---';
+}
+
 export default function Inventory() {
   const { profile } = useAuth();
   const [items, setItems] = useState<any[]>([]);
@@ -155,9 +180,9 @@ export default function Inventory() {
     fetchGridConfig();
   }, []);
 
-  const handleApplyFilter = () => {
-    let formattedEsf = refSearch.esf.trim();
-    let currentEsfSign = esfSign;
+  const applyDirectFilter = (esfValue: string, esfSignVal: string, cilValue: string) => {
+    let formattedEsf = esfValue.trim();
+    let currentEsfSign = esfSignVal;
     if (formattedEsf) {
       if (formattedEsf.startsWith('-')) {
         currentEsfSign = '-';
@@ -176,7 +201,7 @@ export default function Inventory() {
       formattedEsf = num.toFixed(2).replace('.', ',');
     }
 
-    let formattedCil = refSearch.cil.trim();
+    let formattedCil = cilValue.trim();
     if (formattedCil) {
       if (formattedCil.startsWith('-') || formattedCil.startsWith('+')) {
         formattedCil = formattedCil.substring(1).trim();
@@ -196,6 +221,10 @@ export default function Inventory() {
       esfSign: currentEsfSign
     });
     setIsFilterActive(!!formattedEsf || !!formattedCil);
+  };
+
+  const handleApplyFilter = () => {
+    applyDirectFilter(refSearch.esf, esfSign, refSearch.cil);
   };
 
   const handleClearFilter = () => {
@@ -381,7 +410,8 @@ export default function Inventory() {
 
   useEffect(() => {
     if (showModal && selectedItem) {
-      setMovementBranchId(selectedItem.branch_id === 'global' ? '' : selectedItem.branch_id);
+      const bId = selectedItem.branch_id === 'global' ? '' : selectedItem.branch_id;
+      setMovementBranchId(bId || selectedBranch || profile?.branch_id || '');
     } else {
       setMovementBranchId('');
     }
@@ -488,7 +518,8 @@ export default function Inventory() {
         const invDoc = await transaction.get(invRef);
         let currentQty = 0;
         if (invDoc.exists()) {
-          currentQty = invDoc.data().quantity || 0;
+          const rawQty = invDoc.data().quantity;
+          currentQty = typeof rawQty === 'number' ? rawQty : (parseInt(String(rawQty || 0)) || 0);
         }
 
         const qtyChange = newSkuModalMode === 'entry' ? qtyAmount : -qtyAmount;
@@ -528,8 +559,9 @@ export default function Inventory() {
       setNewFamilyId('');
       setNewEsf('');
       setNewCil('');
-      setNewQty('0');
+      setNewQty('1');
       setNewReason('');
+      setNewEntryMode('family_dioptre');
       clearCache('lensSkus');
       fetchAllSkus(true);
       fetchData(true);
@@ -553,12 +585,19 @@ export default function Inventory() {
   };
 
   const handleMovement = async () => {
-    if (!selectedItem || !qty || parseInt(qty) <= 0) return;
+    if (!selectedItem) {
+      alert("Nenhum item selecionado.");
+      return;
+    }
+
+    const amount = parseInt(qty);
+    if (isNaN(amount) || amount <= 0) {
+      alert("Por favor, insira uma quantidade válida maior que 0.");
+      return;
+    }
     
     // Resolve target branch correctly
-    const targetBranchId = (!selectedItem.branch_id || selectedItem.branch_id === 'global') 
-      ? movementBranchId 
-      : selectedItem.branch_id;
+    const targetBranchId = movementBranchId || selectedItem.branch_id;
 
     if (!targetBranchId) {
       alert("Por favor, selecione a filial.");
@@ -586,7 +625,6 @@ export default function Inventory() {
     }
 
     setMovementLoading(true);
-    const amount = parseInt(qty);
     const finalQty = showModal === 'entry' ? amount : -amount;
 
     try {
@@ -627,7 +665,8 @@ export default function Inventory() {
         
         let currentQty = 0;
         if (invDoc.exists()) {
-          currentQty = invDoc.data().quantity || 0;
+          const rawQty = invDoc.data().quantity;
+          currentQty = typeof rawQty === 'number' ? rawQty : (parseInt(String(rawQty || 0)) || 0);
         }
 
         const newQty = currentQty + finalQty;
@@ -946,7 +985,7 @@ export default function Inventory() {
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Controle de Estoque</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Estoque Geral</h1>
           <p className="text-sm text-slate-400 mt-1">Gerencie a disponibilidade de lentes em tempo real.</p>
         </div>
         
@@ -965,6 +1004,11 @@ export default function Inventory() {
                 fetchAllSkus(true);
                 setNewSkuModalMode('entry');
                 setNewReason('');
+                setNewQty('1');
+                setNewFamilyId('');
+                setNewEsf('');
+                setNewCil('');
+                setNewEntryMode('family_dioptre');
                 setNewBranchId(selectedBranch || profile?.branch_id || '');
                 setShowNewSkuModal(true);
               }}
@@ -977,6 +1021,11 @@ export default function Inventory() {
                 fetchAllSkus(true);
                 setNewSkuModalMode('writeoff');
                 setNewReason('');
+                setNewQty('1');
+                setNewFamilyId('');
+                setNewEsf('');
+                setNewCil('');
+                setNewEntryMode('family_dioptre');
                 setNewBranchId(selectedBranch || profile?.branch_id || '');
                 setShowNewSkuModal(true);
               }}
@@ -1034,14 +1083,12 @@ export default function Inventory() {
                   onChange={(e) => {
                     const val = e.target.value;
                     if (!val) {
-                      setRefSearch(prev => ({ ...prev, esf: '' }));
-                      setEsfSign('+');
+                      applyDirectFilter('', '+', refSearch.cil);
                     } else {
                       const parsed = parseFloat(val);
                       const absValStr = Math.abs(parsed).toFixed(2).replace('.', ',');
                       const sign = parsed < 0 ? '-' : '+';
-                      setRefSearch(prev => ({ ...prev, esf: absValStr }));
-                      setEsfSign(sign);
+                      applyDirectFilter(absValStr, sign, refSearch.cil);
                     }
                   }}
                   className="w-full h-full text-center text-sm sm:text-base font-black text-slate-800 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-4 pr-10 transition-all cursor-pointer appearance-none"
@@ -1063,9 +1110,7 @@ export default function Inventory() {
                 <div className="flex items-center h-full shrink-0 pr-1 border-l border-slate-100 bg-slate-50/70">
                   <button 
                     onClick={() => {
-                      setRefSearch(prev => ({ ...prev, esf: '' }));
-                      setAppliedRefSearch(prev => ({ ...prev, esf: '' }));
-                      setIsFilterActive(!!refSearch.cil);
+                      applyDirectFilter('', '+', refSearch.cil);
                     }}
                     className="p-1 px-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-lg transition-all border-none outline-none focus:ring-0 cursor-pointer mr-1"
                     title="Limpar"
@@ -1087,11 +1132,11 @@ export default function Inventory() {
                   onChange={(e) => {
                     const val = e.target.value;
                     if (!val) {
-                      setRefSearch(prev => ({ ...prev, cil: '' }));
+                      applyDirectFilter(refSearch.esf, esfSign, '');
                     } else {
                       const parsed = parseFloat(val);
                       const absValStr = Math.abs(parsed).toFixed(2).replace('.', ',');
-                      setRefSearch(prev => ({ ...prev, cil: absValStr }));
+                      applyDirectFilter(refSearch.esf, esfSign, absValStr);
                     }
                   }}
                   className="w-full h-full text-center text-sm sm:text-base font-black text-slate-800 bg-slate-50/70 hover:bg-slate-100/30 focus:bg-white focus:text-slate-900 border-none outline-none focus:outline-none focus:ring-0 focus:border-none px-4 pr-10 transition-all cursor-pointer appearance-none"
@@ -1113,9 +1158,7 @@ export default function Inventory() {
                 <div className="flex items-center h-full shrink-0 pr-1 border-l border-slate-100 bg-slate-50/70">
                   <button 
                     onClick={() => {
-                      setRefSearch(prev => ({ ...prev, cil: '' }));
-                      setAppliedRefSearch(prev => ({ ...prev, cil: '' }));
-                      setIsFilterActive(!!refSearch.esf);
+                      applyDirectFilter(refSearch.esf, esfSign, '');
                     }}
                     className="p-1 px-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-lg transition-all border-none outline-none focus:ring-0 cursor-pointer mr-1"
                     title="Limpar"
@@ -1248,7 +1291,7 @@ export default function Inventory() {
                           "text-sm font-bold",
                           item.quantity <= (item.sku?.family?.min_stock_per_sku || 0) ? "text-red-500" : "text-slate-700"
                         )}>
-                          {item.quantity} unid.
+                          {item.quantity} unidades
                         </span>
                       </td>
                       <td className="px-6 py-4 text-center">
@@ -1264,7 +1307,7 @@ export default function Inventory() {
                       </td>
                       <td className="px-6 py-4">
                         <span className="text-xs text-slate-400">
-                          {item.updated_at ? new Date(item.updated_at).toLocaleDateString('pt-BR') : '---'}
+                          {formatUpdateDate(item.updated_at)}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -1274,6 +1317,8 @@ export default function Inventory() {
                               <button 
                                 onClick={() => {
                                   setSelectedItem(item);
+                                  setQty('1');
+                                  setReason('');
                                   setShowModal('entry');
                                 }}
                                 className="p-2 text-slate-400 hover:text-brand-teal transition-colors rounded-lg bg-slate-100 hover:bg-emerald-50" 
@@ -1284,6 +1329,8 @@ export default function Inventory() {
                               <button 
                                 onClick={() => {
                                   setSelectedItem(item);
+                                  setQty('1');
+                                  setReason('');
                                   setShowModal('exit');
                                 }}
                                 className="p-2 text-slate-400 hover:text-red-500 transition-colors rounded-lg bg-slate-100 hover:bg-red-50" 
@@ -1294,6 +1341,8 @@ export default function Inventory() {
                               <button 
                                 onClick={() => {
                                   setSelectedItem(item);
+                                  setQty('1');
+                                  setReason('');
                                   setShowModal('writeoff');
                                 }}
                                 className="p-2 text-slate-400 hover:text-amber-500 transition-colors rounded-lg bg-slate-100 hover:bg-amber-50" 
@@ -1703,16 +1752,24 @@ export default function Inventory() {
                 </button>
               </div>
 
-              {selectedItem && (
-                <div className="mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <p className="text-xs font-bold text-slate-400 uppercase mb-1">Item Selecionado</p>
-                  <p className="text-sm font-bold text-slate-700">{selectedItem.sku?.sku_code}</p>
-                  <p className="text-xs text-slate-500">{selectedItem.sku?.family?.manufacturer} - {selectedItem.sku?.family?.line}</p>
-                </div>
-              )}
+              {selectedItem && (() => {
+                const itemBranch = branches.find(b => b.id === (movementBranchId || selectedItem.branch_id));
+                return (
+                  <div className="mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <p className="text-xs font-bold text-slate-400 uppercase mb-1">Item Selecionado</p>
+                    <p className="text-sm font-bold text-slate-700">{selectedItem.sku?.sku_code}</p>
+                    <p className="text-xs text-slate-500">{selectedItem.sku?.family?.manufacturer} - {selectedItem.sku?.family?.line}</p>
+                    {itemBranch && (
+                      <p className="mt-2 text-xs font-bold text-brand-teal uppercase tracking-wider bg-teal-50 px-2.5 py-1 rounded inline-block">
+                        Filial: {itemBranch.name} ({itemBranch.code})
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="space-y-4">
-                {(!selectedItem || !selectedItem.branch_id || selectedItem.branch_id === 'global') && (
+                {(!selectedBranch || !selectedItem || !selectedItem.branch_id || selectedItem.branch_id === 'global') && (
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Filial de Destino</label>
                     <select 

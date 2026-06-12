@@ -224,7 +224,7 @@ export default function Layout({ children, currentRoute, onNavigate, theme, onTo
                <Package size={20} className="text-white" />
             </div>
             {sidebarOpen && (
-              <span className="font-bold tracking-tight truncate">Controle Lens</span>
+              <span translate="no" className="notranslate font-bold tracking-tight truncate">Controle Lens</span>
             )}
           </div>
           <button 
@@ -264,7 +264,7 @@ export default function Layout({ children, currentRoute, onNavigate, theme, onTo
                 >
                   <Icon size={22} className={cn(isActive ? "text-white" : "text-cyan-300 group-hover:text-white")} />
                   {sidebarOpen && (
-                    <span className="ml-3 font-medium text-sm whitespace-nowrap">{item.label}</span>
+                    <span translate="no" className="notranslate ml-3 font-medium text-sm whitespace-nowrap">{item.label}</span>
                   )}
                   {!sidebarOpen && isActive && (
                     <motion.div 
@@ -290,7 +290,7 @@ export default function Layout({ children, currentRoute, onNavigate, theme, onTo
                               : "text-cyan-200 hover:text-white hover:bg-cyan-850/40 pl-4"
                           )}
                         >
-                          {sub.label}
+                          <span translate="no" className="notranslate">{sub.label}</span>
                         </button>
                       );
                     })}
@@ -380,7 +380,9 @@ export default function Layout({ children, currentRoute, onNavigate, theme, onTo
                 <p className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-none">
                   {profile?.full_name || profile?.email?.split('@')[0] || 'Usuário'}
                 </p>
-                <p className="text-xs text-slate-400 mt-1 capitalize">{profile?.role || 'Visitante'}</p>
+                <p className="text-xs text-slate-400 mt-1 uppercase font-semibold tracking-wider">
+                  {profile?.role === 'admin' ? 'Administrador' : profile?.role === 'consultor' ? 'Consultor' : 'Visitante'}
+                </p>
               </div>
               <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-brand-teal ring-2 ring-emerald-50 ring-offset-2">
                 {profile?.full_name?.charAt(0).toUpperCase() || profile?.email?.charAt(0).toUpperCase() || '?'}

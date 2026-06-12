@@ -35,11 +35,13 @@ export default function Login() {
           
           // Look up pre-registered profile
           let preProfileData: any = {};
+          let preDocExists = false;
           if (emailId) {
             try {
               const preDoc = await getDoc(doc(db, 'profiles', emailId));
               if (preDoc.exists()) {
                 preProfileData = preDoc.data();
+                preDocExists = true;
               }
             } catch (err) {
               console.warn('Could not read pre-existing profile during register:', err);
@@ -59,6 +61,17 @@ export default function Login() {
               created_at: preProfileData.created_at || new Date().toISOString(),
               updated_at: new Date().toISOString()
             });
+
+            // Clean up pre-registered profile if it exists to avoid duplications
+            if (preDocExists) {
+              try {
+                // Delete the email-based document, as we have merged it into the active UID document
+                const { deleteDoc } = await import('firebase/firestore');
+                await deleteDoc(doc(db, 'profiles', emailId));
+              } catch (delErr) {
+                console.warn('Silent warning: Could not delete pre-profile during signup:', delErr);
+              }
+            }
           } catch (writeErr) {
             handleFirestoreError(writeErr, OperationType.WRITE, path);
           }
@@ -74,32 +87,45 @@ export default function Login() {
           const docSnap = await getDoc(docRef);
           const isMasterUser = firebaseUser.email?.toLowerCase() === ALLOWED_EMAIL.toLowerCase() || normalizedEmail === ALLOWED_EMAIL.toLowerCase();
           
-          // Auto-migrate or initialize profile if not already configured in actual UID path
-          if (!docSnap.exists() || isMasterUser) {
-            let preProfileData: any = {};
-            if (emailId) {
-              try {
-                const preDoc = await getDoc(doc(db, 'profiles', emailId));
-                if (preDoc.exists()) {
-                  preProfileData = preDoc.data();
-                }
-              } catch (err) {
-                console.warn('Could not check first-time profile on login:', err);
+          // Look up pre-registered profile
+          let preProfileData: any = {};
+          let preDocExists = false;
+          if (emailId) {
+            try {
+              const preDoc = await getDoc(doc(db, 'profiles', emailId));
+              if (preDoc.exists()) {
+                preProfileData = preDoc.data();
+                preDocExists = true;
               }
+            } catch (err) {
+              console.warn('Could not check first-time profile on login:', err);
             }
+          }
 
-            const finalRole = isMasterUser ? 'admin' : (preProfileData.role || 'visitante');
+          // Auto-migrate or initialize profile if not already configured in actual UID path or is master user
+          if (!docSnap.exists() || isMasterUser || preDocExists) {
+            const finalRole = isMasterUser ? 'admin' : (preProfileData.role || docSnap.data()?.role || 'visitante');
 
             try {
               await setDoc(docRef, {
-                full_name: preProfileData.full_name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuário',
+                full_name: preProfileData.full_name || docSnap.data()?.full_name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuário',
                 email: firebaseUser.email?.toLowerCase() ?? normalizedEmail,
                 role: finalRole,
-                status: preProfileData.status || 'active',
-                branch_id: preProfileData.branch_id || '',
+                status: preProfileData.status || docSnap.data()?.status || 'active',
+                branch_id: preProfileData.branch_id || docSnap.data()?.branch_id || '',
                 updated_at: new Date().toISOString(),
                 ...(docSnap.exists() ? {} : { created_at: preProfileData.created_at || new Date().toISOString() })
               }, { merge: true });
+
+              // Clean up pre-registered profile if it exists to avoid duplications
+              if (preDocExists) {
+                try {
+                  const { deleteDoc } = await import('firebase/firestore');
+                  await deleteDoc(doc(db, 'profiles', emailId));
+                } catch (delErr) {
+                  console.warn('Silent warning: Could not delete pre-profile during login:', delErr);
+                }
+              }
             } catch (writeErr) {
               handleFirestoreError(writeErr, OperationType.WRITE, `profiles/${firebaseUser.uid}`);
             }
