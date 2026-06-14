@@ -1320,7 +1320,7 @@ export default function Reports() {
                   </p>
                 </div>
               ) : (
-                <table className="w-full text-left border-collapse table-auto">
+                <table key={selectedReportId} className="w-full text-left border-collapse table-auto">
                   <thead>
                     <tr key={`header_${selectedReportId}`} className="bg-slate-50/70 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                       {selectedReportId === 'inventory_current' && (
@@ -1481,7 +1481,7 @@ export default function Reports() {
                           </>
                         )}
 
-                        {selectedReportId === 'movements' && { ...translateMovType(row.type) } && (
+                        {selectedReportId === 'movements' && (
                           <>
                             <td className="py-3 px-4 text-[11px] text-slate-400">{row.formatted_date}</td>
                             <td className="py-3 px-4">{row.branch_name}</td>
