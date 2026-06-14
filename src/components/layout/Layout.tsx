@@ -394,7 +394,6 @@ export default function Layout({ children, currentRoute, onNavigate, theme, onTo
         {/* Content Area */}
         <div className="p-8">
           <motion.div
-            key={currentRoute}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
