@@ -1201,113 +1201,113 @@ export default function Reports() {
             </div>
 
             {/* Visual Charts Dashboard Section */}
-            {chartsVisible && filteredPreviewData.length > 0 && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                  {/* Primary Analytic Chart */}
-                  <div className="p-5 bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col justify-between">
-                    <div>
-                      <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
-                        {selectedReportId === 'inventory_current' && "Estoque por Filial"}
-                        {selectedReportId === 'inventory_consolidated' && "Top 10 SKUs por Estoque"}
-                        {selectedReportId === 'low_stock' && "Déficit por Filial"}
-                        {selectedReportId === 'out_of_stock' && "Rupturas por Filial"}
-                        {selectedReportId === 'movements' && "Balanço das Movimentações por Tipo"}
-                        {selectedReportId === 'financial_valuation' && "Investimento Total por Filial"}
-                      </h4>
-                      <p className="text-[11px] text-slate-500 font-medium mb-4">
-                        {selectedReportId === 'inventory_current' && "Quantidade de lentes físicas em estoque nas filiais."}
-                        {selectedReportId === 'inventory_consolidated' && "Códigos de SKU com maiores volumes somados na rede."}
-                        {selectedReportId === 'low_stock' && "Quantidades que faltam para atingir estoque mínimo de segurança."}
-                        {selectedReportId === 'out_of_stock' && "Casos de estoque zerado agrupados por loja."}
-                        {selectedReportId === 'movements' && "Distribuição de movimentações (Entradas, Saídas, Baixas, etc)."}
-                        {selectedReportId === 'financial_valuation' && "Divisão financeira do valor total imobilizado do estoque."}
-                      </p>
+            <div className={cn("space-y-6", (!chartsVisible || filteredPreviewData.length === 0) && "hidden")}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                {/* Primary Analytic Chart */}
+                <div className="p-5 bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col justify-between">
+                  <div>
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                      {selectedReportId === 'inventory_current' && "Estoque por Filial"}
+                      {selectedReportId === 'inventory_consolidated' && "Top 10 SKUs por Estoque"}
+                      {selectedReportId === 'low_stock' && "Déficit por Filial"}
+                      {selectedReportId === 'out_of_stock' && "Rupturas por Filial"}
+                      {selectedReportId === 'movements' && "Balanço das Movimentações por Tipo"}
+                      {selectedReportId === 'financial_valuation' && "Investimento Total por Filial"}
+                    </h4>
+                    <p className="text-[11px] text-slate-500 font-medium mb-4">
+                      {selectedReportId === 'inventory_current' && "Quantidade de lentes físicas em estoque nas filiais."}
+                      {selectedReportId === 'inventory_consolidated' && "Códigos de SKU com maiores volumes somados na rede."}
+                      {selectedReportId === 'low_stock' && "Quantidades que faltam para atingir estoque mínimo de segurança."}
+                      {selectedReportId === 'out_of_stock' && "Casos de estoque zerado agrupados por loja."}
+                      {selectedReportId === 'movements' && "Distribuição de movimentações (Entradas, Saídas, Baixas, etc)."}
+                      {selectedReportId === 'financial_valuation' && "Divisão financeira do valor total imobilizado do estoque."}
+                    </p>
+                  </div>
+                  <div key={`primary_chart_container_${selectedReportId}_${chartData.series1.length}`} className="h-64 w-full">
+                    <ResponsiveContainer key={`primary_chart_${selectedReportId}_${chartData.series1.length}`} width="100%" height="100%">
+                      <BarChart data={chartData.series1} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="name" stroke="#94a3b8" fontSize={9} fontWeight="bold" tickLine={false} />
+                        <YAxis 
+                          stroke="#94a3b8" 
+                          fontSize={9} 
+                          fontWeight="bold" 
+                          tickLine={false}
+                          tickFormatter={(value) => selectedReportId === 'financial_valuation' ? `R$${value >= 1000 ? (value/1000).toFixed(0)+'k' : value}` : value}
+                        />
+                        <ChartTooltip 
+                          formatter={(value: any) => [
+                            selectedReportId === 'financial_valuation' ? formatCurrency(Number(value)) : `${value} un`, 
+                            selectedReportId === 'movements' ? "Peças" : "Estoque"
+                          ]}
+                          contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}
+                        />
+                        <Bar dataKey="value" fill="#0d9488" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                          {chartData.series1.map((entry, index) => {
+                            const COLORS = ['#0d9488', '#0891b2', '#2563eb', '#4f46e5', '#d97706', '#e11d48', '#059669', '#8b5cf6'];
+                            return <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />;
+                          })}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Secondary Analytic Chart */}
+                <div className="p-5 bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col justify-between">
+                  <div>
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                      {selectedReportId === 'movements' ? "Volume Real Movimentado por Filial" : "Distribuição por Fabricante"}
+                    </h4>
+                    <p className="text-[11px] text-slate-500 font-medium mb-4">
+                      {selectedReportId === 'movements' ? "Quantidades líquidas movimentadas em cada ponto de venda." : "Análise analítica de concentração estratégica de fornecedores de lente."}
+                    </p>
+                  </div>
+                  <div key={`secondary_chart_container_${selectedReportId}_${chartData.series2.length}`} className="h-64 w-full flex items-center justify-center">
+                    <div className={cn("text-xs text-slate-400 font-bold", chartData.series2.length > 0 && "hidden")}>
+                        Sem dados suficientes para gerar gráfico secundário.
                     </div>
-                    <div key={`primary_chart_container_${selectedReportId}_${chartData.series1.length}`} className="h-64 w-full">
-                      <ResponsiveContainer key={`primary_chart_${selectedReportId}_${chartData.series1.length}`} width="100%" height="100%">
-                        <BarChart data={chartData.series1} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                          <XAxis dataKey="name" stroke="#94a3b8" fontSize={9} fontWeight="bold" tickLine={false} />
-                          <YAxis 
-                            stroke="#94a3b8" 
-                            fontSize={9} 
-                            fontWeight="bold" 
-                            tickLine={false}
-                            tickFormatter={(value) => selectedReportId === 'financial_valuation' ? `R$${value >= 1000 ? (value/1000).toFixed(0)+'k' : value}` : value}
-                          />
+                    <div className={cn("w-full h-full", chartData.series2.length === 0 && "hidden")}>
+                      <ResponsiveContainer key={`secondary_chart_${selectedReportId}_${chartData.series2.length}`} width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={chartData.series2}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={45}
+                            outerRadius={80}
+                            paddingAngle={3}
+                            dataKey="value"
+                            isAnimationActive={false}
+                          >
+                            {chartData.series2.map((entry, index) => {
+                              const COLORS = ['#4f46e5', '#3b82f6', '#0d9488', '#059669', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6'];
+                              return <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />;
+                            })}
+                          </Pie>
                           <ChartTooltip 
                             formatter={(value: any) => [
                               selectedReportId === 'financial_valuation' ? formatCurrency(Number(value)) : `${value} un`, 
-                              selectedReportId === 'movements' ? "Peças" : "Estoque"
+                              "Share"
                             ]}
                             contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}
                           />
-                          <Bar dataKey="value" fill="#0d9488" radius={[4, 4, 0, 0]}>
-                            {chartData.series1.map((entry, index) => {
-                              const COLORS = ['#0d9488', '#0891b2', '#2563eb', '#4f46e5', '#d97706', '#e11d48', '#059669', '#8b5cf6'];
-                              return <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />;
-                            })}
-                          </Bar>
-                        </BarChart>
+                          <ChartLegend 
+                            iconSize={8}
+                            iconType="circle"
+                            layout="horizontal"
+                            verticalAlign="bottom"
+                            align="center"
+                            wrapperStyle={{ fontSize: '9px', fontWeight: 'bold', color: '#64748b' }}
+                          />
+                        </PieChart>
                       </ResponsiveContainer>
                     </div>
                   </div>
-
-                  {/* Secondary Analytic Chart */}
-                  <div className="p-5 bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col justify-between">
-                    <div>
-                      <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
-                        {selectedReportId === 'movements' ? "Volume Real Movimentado por Filial" : "Distribuição por Fabricante"}
-                      </h4>
-                      <p className="text-[11px] text-slate-500 font-medium mb-4">
-                        {selectedReportId === 'movements' ? "Quantidades líquidas movimentadas em cada ponto de venda." : "Análise analítica de concentração estratégica de fornecedores de lente."}
-                      </p>
-                    </div>
-                    <div key={`secondary_chart_container_${selectedReportId}_${chartData.series2.length}`} className="h-64 w-full flex items-center justify-center">
-                      {chartData.series2.length === 0 ? (
-                        <div className="text-xs text-slate-400 font-bold">Sem dados suficientes para gerar gráfico secundário.</div>
-                      ) : (
-                        <ResponsiveContainer key={`secondary_chart_${selectedReportId}_${chartData.series2.length}`} width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={chartData.series2}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={45}
-                              outerRadius={80}
-                              paddingAngle={3}
-                              dataKey="value"
-                            >
-                              {chartData.series2.map((entry, index) => {
-                                const COLORS = ['#4f46e5', '#3b82f6', '#0d9488', '#059669', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6'];
-                                return <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />;
-                              })}
-                            </Pie>
-                            <ChartTooltip 
-                              formatter={(value: any) => [
-                                selectedReportId === 'financial_valuation' ? formatCurrency(Number(value)) : `${value} un`, 
-                                "Share"
-                              ]}
-                              contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}
-                            />
-                            <ChartLegend 
-                              iconSize={8}
-                              iconType="circle"
-                              layout="horizontal"
-                              verticalAlign="bottom"
-                              align="center"
-                              wrapperStyle={{ fontSize: '9px', fontWeight: 'bold', color: '#64748b' }}
-                            />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      )}
-                    </div>
-                  </div>
                 </div>
-                <div className="border-b border-slate-100 pb-2" />
               </div>
-            )}
+              <div className="border-b border-slate-100 pb-2" />
+            </div>
 
             {/* Preview Data Grid table */}
             <div className="overflow-x-auto rounded-2xl border border-slate-150">
