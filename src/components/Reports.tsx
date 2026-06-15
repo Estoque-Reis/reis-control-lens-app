@@ -1236,6 +1236,7 @@ export default function Reports() {
                           tickFormatter={(value) => selectedReportId === 'financial_valuation' ? `R$${value >= 1000 ? (value/1000).toFixed(0)+'k' : value}` : value}
                         />
                         <ChartTooltip 
+                          isAnimationActive={false}
                           formatter={(value: any) => [
                             selectedReportId === 'financial_valuation' ? formatCurrency(Number(value)) : `${value} un`, 
                             selectedReportId === 'movements' ? "Peças" : "Estoque"
@@ -1286,6 +1287,7 @@ export default function Reports() {
                             })}
                           </Pie>
                           <ChartTooltip 
+                            isAnimationActive={false}
                             formatter={(value: any) => [
                               selectedReportId === 'financial_valuation' ? formatCurrency(Number(value)) : `${value} un`, 
                               "Share"

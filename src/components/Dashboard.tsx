@@ -349,10 +349,11 @@ export default function Dashboard() {
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10}} />
                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
                 <Tooltip 
+                  isAnimationActive={false}
                   cursor={{fill: '#f8fafc'}}
                   contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
                 />
-                <Bar dataKey="stock" radius={[6, 6, 0, 0]} barSize={40}>
+                <Bar dataKey="stock" radius={[6, 6, 0, 0]} barSize={40} isAnimationActive={false}>
                   {branchStockData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
@@ -376,12 +377,13 @@ export default function Dashboard() {
                   outerRadius={80}
                   paddingAngle={5}
                   dataKey="value"
+                  isAnimationActive={false}
                 >
                   {materialData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip isAnimationActive={false} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -429,10 +431,11 @@ export default function Dashboard() {
                   tick={{ fill: '#94a3b8', fontSize: 11 }} 
                 />
                 <Tooltip 
+                  isAnimationActive={false}
                   cursor={{ fill: '#f8fafc' }}
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '11px', fontWeight: 'bold' }}
                 />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={24}>
+                <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={24} isAnimationActive={false}>
                   {familyStockData.map((entry, index) => {
                     const familyCOLORS = ['#0d9488', '#0f766e', '#0891b2', '#2563eb', '#4f46e5', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
                     return <Cell key={`cell-${index}`} fill={familyCOLORS[index % familyCOLORS.length]} />;

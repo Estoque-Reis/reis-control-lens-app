@@ -675,10 +675,11 @@ export default function ReportsFamily() {
                       <XAxis dataKey="name" stroke="#94a3b8" fontSize={9} fontWeight="bold" tickLine={false} />
                       <YAxis stroke="#94a3b8" fontSize={9} fontWeight="bold" tickLine={false} />
                       <ChartTooltip 
+                        isAnimationActive={false}
                         formatter={(value: any) => [`${value} un`, "Total"]}
                         contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}
                       />
-                      <Bar dataKey="value" fill="#0891b2" radius={[4, 4, 0, 0]}>
+                      <Bar dataKey="value" fill="#0891b2" radius={[4, 4, 0, 0]} isAnimationActive={false}>
                         {chartData.qtyByManufacturer.map((entry, index) => {
                           const COLORS = ['#0891b2', '#0d9488', '#2563eb', '#4f46e5', '#d97706', '#e11d48', '#059669', '#8b5cf6'];
                           return <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />;
@@ -713,6 +714,7 @@ export default function ReportsFamily() {
                           outerRadius={80}
                           paddingAngle={3}
                           dataKey="value"
+                          isAnimationActive={false}
                         >
                           {chartData.valueByManufacturer.map((entry, index) => {
                             const COLORS = ['#4f46e5', '#3b82f6', '#0d9488', '#059669', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6'];
@@ -720,6 +722,7 @@ export default function ReportsFamily() {
                           })}
                         </Pie>
                         <ChartTooltip 
+                          isAnimationActive={false}
                           formatter={(value: any) => [formatCurrency(Number(value)), "Investimento"]}
                           contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}
                         />
