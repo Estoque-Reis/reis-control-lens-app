@@ -137,7 +137,14 @@ export default function Login() {
       if (err.code === 'auth/operation-not-allowed') {
         setError('O login por E-mail/Senha está desativado. Ative "Email/Password" no console do Firebase.');
       } else if (err.code === 'auth/invalid-credential') {
-        setError('E-mail ou senha incorretos ou conta inexistente.');
+        setError(
+          <div className="flex flex-col gap-1.5">
+            <span>E-mail ou senha incorretos, ou o usuário ainda não foi cadastrado no sistema.</span>
+            <span className="text-[11px] font-medium text-emerald-600 block mt-0.5">
+              💡 Caso este seja o seu primeiro acesso, clique em <strong className="underline">"Cadastre-se"</strong> logo abaixo para criar sua conta.
+            </span>
+          </div>
+        );
       } else if (err.code === 'auth/email-already-in-use') {
         setError('Este e-mail já está cadastrado.');
       } else if (err.code === 'auth/weak-password') {
