@@ -521,29 +521,39 @@ export default function Inventory() {
       
       // Use transaction to load current quantity and add/subtract it atomically
       await runTransaction(db, async (transaction) => {
-        // If we need to create the SKU, do it atomically inside the transaction
+        // Step 1: Define references
+        let skuRef = null;
+        let skuDoc = null;
         if (newEntryMode !== 'sku') {
           const family = families.find(f => f.id === newFamilyId);
           if (family) {
+            skuRef = doc(db, 'lensSkus', finalSkuId);
+          }
+        }
+        
+        // Step 2: Perform ALL reads at the top
+        if (skuRef) {
+          skuDoc = await transaction.get(skuRef);
+        }
+        const invDoc = await transaction.get(invRef);
+
+        // Step 3: Perform logic & writes
+        if (newEntryMode !== 'sku' && skuRef && skuDoc) {
+          if (!skuDoc.exists()) {
+            const family = families.find(f => f.id === newFamilyId)!;
             const esf = parseFloat(newEsf);
             const cil = parseFloat(newCil);
             const skuCode = generateSkuCode(family.line, esf, cil);
-            const skuRef = doc(db, 'lensSkus', finalSkuId);
-            const skuDoc = await transaction.get(skuRef);
-            
-            if (!skuDoc.exists()) {
-              transaction.set(skuRef, {
-                family_id: family.id,
-                sku_code: skuCode,
-                spherical: esf,
-                cylindrical: cil,
-                created_at: serverTimestamp()
-              });
-            }
+            transaction.set(skuRef, {
+              family_id: family.id,
+              sku_code: skuCode,
+              spherical: esf,
+              cylindrical: cil,
+              created_at: serverTimestamp()
+            });
           }
         }
 
-        const invDoc = await transaction.get(invRef);
         let currentQty = 0;
         if (invDoc.exists()) {
           const rawQty = invDoc.data().quantity;
@@ -689,10 +699,22 @@ export default function Inventory() {
       const finalItemId = `${targetBranchId}_${finalSkuId}`;
 
       await runTransaction(db, async (transaction) => {
-        // Create lensSkus document atomically if virtual SKU is being resolved
+        // Step 1: Define references
+        let skuRef = null;
+        let skuDoc = null;
         if (isVirtualCreate && virtualFamily) {
-          const skuRef = doc(db, 'lensSkus', finalSkuId);
-          const skuDoc = await transaction.get(skuRef);
+          skuRef = doc(db, 'lensSkus', finalSkuId);
+        }
+        const invRef = doc(db, 'inventory', finalItemId);
+
+        // Step 2: Perform ALL reads at the top
+        if (skuRef) {
+          skuDoc = await transaction.get(skuRef);
+        }
+        const invDoc = await transaction.get(invRef);
+
+        // Step 3: Perform logic & writes
+        if (isVirtualCreate && virtualFamily && skuRef && skuDoc) {
           if (!skuDoc.exists()) {
             transaction.set(skuRef, {
               family_id: virtualFamily.id,
@@ -704,9 +726,6 @@ export default function Inventory() {
           }
         }
 
-        const invRef = doc(db, 'inventory', finalItemId);
-        const invDoc = await transaction.get(invRef);
-        
         let currentQty = 0;
         if (invDoc.exists()) {
           const rawQty = invDoc.data().quantity;
