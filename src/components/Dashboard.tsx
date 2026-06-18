@@ -343,7 +343,7 @@ export default function Dashboard() {
             <h3 className="text-lg font-bold text-slate-800">Estoque por Filial</h3>
           </div>
           <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer key="dashboard_branch_stock_container" width="100%" height="100%" debounce={50}>
               <BarChart data={branchStockData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10}} />
@@ -367,7 +367,7 @@ export default function Dashboard() {
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
           <h3 className="text-lg font-bold text-slate-800 mb-8">Material</h3>
           <div className="h-[250px] mb-6">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer key="dashboard_material_pie_container" width="100%" height="100%" debounce={50}>
               <PieChart>
                 <Pie
                   data={materialData}
@@ -413,7 +413,7 @@ export default function Dashboard() {
               Nenhuma lente em estoque encontrada para as famílias.
             </div>
           ) : (
-            <ResponsiveContainer key={`family_responsive_container_${familyStockData.length}`} width="100%" height="100%">
+            <ResponsiveContainer key={`family_responsive_container_${familyStockData.length}`} width="100%" height="100%" debounce={50}>
               <BarChart data={familyStockData} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis 

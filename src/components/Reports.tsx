@@ -1369,24 +1369,26 @@ export default function Reports() {
                 <div className="p-5 bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col justify-between">
                   <div>
                     <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
-                      {selectedReportId === 'inventory_current' && "Estoque por Filial"}
-                      {selectedReportId === 'inventory_consolidated' && "Top 10 SKUs por Estoque"}
-                      {selectedReportId === 'low_stock' && "Déficit por Filial"}
-                      {selectedReportId === 'out_of_stock' && "Rupturas por Filial"}
-                      {selectedReportId === 'movements' && "Balanço das Movimentações por Tipo"}
-                      {selectedReportId === 'financial_valuation' && "Investimento Total por Filial"}
+                      {selectedReportId === 'inventory_current' ? "Estoque por Filial" :
+                       selectedReportId === 'inventory_consolidated' ? "Top 10 SKUs por Estoque" :
+                       selectedReportId === 'low_stock' ? "Déficit por Filial" :
+                       selectedReportId === 'out_of_stock' ? "Rupturas por Filial" :
+                       selectedReportId === 'movements' ? "Balanço das Movimentações por Tipo" :
+                       selectedReportId === 'financial_valuation' ? "Investimento Total por Filial" :
+                       selectedReportId === 'replenishment' ? "Déficit de Reposição Cruzada por Filial" : ""}
                     </h4>
                     <p className="text-[11px] text-slate-500 font-medium mb-4">
-                      {selectedReportId === 'inventory_current' && "Quantidade de lentes físicas em estoque nas filiais."}
-                      {selectedReportId === 'inventory_consolidated' && "Códigos de SKU com maiores volumes somados na rede."}
-                      {selectedReportId === 'low_stock' && "Quantidades que faltam para atingir estoque mínimo de segurança."}
-                      {selectedReportId === 'out_of_stock' && "Casos de estoque zerado agrupados por loja."}
-                      {selectedReportId === 'movements' && "Distribuição de movimentações (Entradas, Saídas, Baixas, etc)."}
-                      {selectedReportId === 'financial_valuation' && "Divisão financeira do valor total imobilizado do estoque."}
+                      {selectedReportId === 'inventory_current' ? "Quantidade de lentes físicas em estoque nas filiais." :
+                       selectedReportId === 'inventory_consolidated' ? "Códigos de SKU com maiores volumes somados na rede." :
+                       selectedReportId === 'low_stock' ? "Quantidades que faltam para atingir estoque mínimo de segurança." :
+                       selectedReportId === 'out_of_stock' ? "Casos de estoque zerado agrupados por loja." :
+                       selectedReportId === 'movements' ? "Distribuição de movimentações (Entradas, Saídas, Baixas, etc)." :
+                       selectedReportId === 'financial_valuation' ? "Divisão financeira do valor total imobilizado do estoque." :
+                       selectedReportId === 'replenishment' ? "Déficit acumulado total que necessita de assistência de ressuprimento cruzado." : ""}
                     </p>
                   </div>
                   <div key={`primary_chart_container_${selectedReportId}_${chartData.series1.length}`} className="h-64 w-full">
-                    <ResponsiveContainer key={`primary_chart_${selectedReportId}_${chartData.series1.length}`} width="100%" height="100%">
+                    <ResponsiveContainer key={`primary_chart_${selectedReportId}_${chartData.series1.length}`} width="100%" height="100%" debounce={50}>
                       <BarChart data={chartData.series1} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                         <XAxis dataKey="name" stroke="#94a3b8" fontSize={9} fontWeight="bold" tickLine={false} />
@@ -1420,10 +1422,12 @@ export default function Reports() {
                 <div className="p-5 bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col justify-between">
                   <div>
                     <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
-                      {selectedReportId === 'movements' ? "Volume Real Movimentado por Filial" : "Distribuição por Fabricante"}
+                      {selectedReportId === 'movements' ? "Volume Real Movimentado por Filial" : 
+                       selectedReportId === 'replenishment' ? "Déficit de Reposição por Fabricante" : "Distribuição por Fabricante"}
                     </h4>
                     <p className="text-[11px] text-slate-500 font-medium mb-4">
-                      {selectedReportId === 'movements' ? "Quantidades líquidas movimentadas em cada ponto de venda." : "Análise analítica de concentração estratégica de fornecedores de lente."}
+                      {selectedReportId === 'movements' ? "Quantidades líquidas movimentadas em cada ponto de venda." : 
+                       selectedReportId === 'replenishment' ? "Análise do déficit acumulado agrupado por marca de fabricante." : "Análise analítica de concentração estratégica de fornecedores de lente."}
                     </p>
                   </div>
                   <div key={`secondary_chart_container_${selectedReportId}_${chartData.series2.length}`} className="h-64 w-full flex items-center justify-center">
@@ -1431,7 +1435,7 @@ export default function Reports() {
                         Sem dados suficientes para gerar gráfico secundário.
                     </div>
                     <div className={cn("w-full h-full", chartData.series2.length === 0 && "hidden")}>
-                      <ResponsiveContainer key={`secondary_chart_${selectedReportId}_${chartData.series2.length}`} width="100%" height="100%">
+                      <ResponsiveContainer key={`secondary_chart_${selectedReportId}_${chartData.series2.length}`} width="100%" height="100%" debounce={50}>
                         <PieChart>
                           <Pie
                             data={chartData.series2}
