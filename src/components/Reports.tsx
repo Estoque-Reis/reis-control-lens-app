@@ -100,7 +100,8 @@ type ReportType =
   | 'low_stock' 
   | 'out_of_stock' 
   | 'movements' 
-  | 'financial_valuation';
+  | 'financial_valuation'
+  | 'replenishment';
 
 // Translate movement types
 export const translateMovType = (type: string) => {
@@ -172,6 +173,13 @@ export default function Reports() {
       desc: 'Cálculo monetário do capital investido em mercadorias a preço de custo do fabricante.',
       icon: DollarSign,
       color: 'bg-indigo-500 text-indigo-600 border-indigo-100 bg-indigo-50/50'
+    },
+    { 
+      id: 'replenishment' as ReportType, 
+      title: 'Plano de Ressuprimento Cruzado', 
+      desc: 'Sugestão automática de transferências inteligentes de filiais com excedente para atender canais com estoque baixo.',
+      icon: ArrowLeftRight,
+      color: 'bg-emerald-500 text-emerald-600 border-emerald-100 bg-emerald-50/50'
     }
   ];
 
@@ -493,10 +501,111 @@ export default function Reports() {
         return result;
       }
 
+      case 'replenishment': {
+        const result: any[] = [];
+        
+        // Map current inventory for rapid lookup of [branchId_skuId] -> quantity
+        const invMap = new Map<string, number>();
+        const invUpdateMap = new Map<string, any>();
+        for (const item of rawInventory) {
+          invMap.set(`${item.branch_id}_${item.sku_id}`, item.quantity || 0);
+          if (item.updated_at) {
+            invUpdateMap.set(`${item.branch_id}_${item.sku_id}`, item.updated_at);
+          }
+        }
+
+        const activeBranches = selectedBranchId === 'all' 
+          ? branches 
+          : branches.filter(b => b.id === selectedBranchId);
+
+        // For each active branch, analyze each SKU to check if replenishment is needed
+        for (const branch of activeBranches) {
+          for (const sku of skus) {
+            const currentQty = invMap.get(`${branch.id}_${sku.id}`) || 0;
+            const family = familiesMap.get(sku.family_id);
+            const minStock = family?.min_stock_per_sku || 0;
+
+            if (currentQty < minStock) {
+              const deficit = minStock - currentQty;
+              const rawUpdate = invUpdateMap.get(`${branch.id}_${sku.id}`);
+              const updateDate = rawUpdate ? parseFirestoreDate(rawUpdate) : null;
+              
+              if (!isDateInRange(updateDate, startDate, endDate)) continue;
+
+              // Find where else this SKU is available
+              const potentialDonors: any[] = [];
+              for (const otherBranch of branches) {
+                if (otherBranch.id === branch.id) continue;
+                const otherQty = invMap.get(`${otherBranch.id}_${sku.id}`) || 0;
+                if (otherQty > 0) {
+                  const otherFamily = familiesMap.get(sku.family_id);
+                  const otherMinStock = otherFamily?.min_stock_per_sku || 0;
+                  const surplus = otherQty - otherMinStock;
+
+                  potentialDonors.push({
+                    branch_id: otherBranch.id,
+                    branch_name: otherBranch.name,
+                    quantity: otherQty,
+                    min_stock: otherMinStock,
+                    surplus: surplus,
+                    is_surplus_donor: surplus > 0
+                  });
+                }
+              }
+
+              // Sort potential donors: surplus donors first, highest surplus / quantity first
+              potentialDonors.sort((a, b) => {
+                if (a.is_surplus_donor && !b.is_surplus_donor) return -1;
+                if (!a.is_surplus_donor && b.is_surplus_donor) return 1;
+                if (a.is_surplus_donor && b.is_surplus_donor) {
+                  return b.surplus - a.surplus;
+                }
+                return b.quantity - a.quantity;
+              });
+
+              // Create detailed suggestion
+              let recommendation = 'Nenhum doador disponível na rede';
+              if (potentialDonors.length > 0) {
+                const best = potentialDonors[0];
+                if (best.is_surplus_donor) {
+                  const toTake = Math.min(deficit, best.surplus);
+                  recommendation = `Pegar ${toTake} un. de "${best.branch_name}" (possui excedente saudável de S=${best.surplus} un)`;
+                } else {
+                  const toTake = Math.min(deficit, best.quantity);
+                  recommendation = `Pegar ${toTake} un. de "${best.branch_name}" (alerta: reduzirá do mínimo da filial doadora)`;
+                }
+              }
+
+              result.push({
+                id: `replenish_${branch.id}_${sku.id}`,
+                branch_id: branch.id,
+                branch_name: branch.name,
+                sku_id: sku.id,
+                sku_code: sku.sku_code,
+                manufacturer: family?.manufacturer || 'N/A',
+                line: family?.line || 'N/A',
+                spherical: sku.spherical,
+                cylindrical: sku.cylindrical,
+                quantity: currentQty,
+                min_stock: minStock,
+                deficit: deficit,
+                donors: potentialDonors,
+                best_recommendation: recommendation,
+                updated_at: updateDate,
+                formatted_date: formatDate(updateDate)
+              });
+            }
+          }
+        }
+
+        // Sort by deficit descending so most critical is first
+        return result.sort((a, b) => b.deficit - a.deficit);
+      }
+
       default:
         return [];
     }
-  }, [loading, selectedReportId, selectedBranchId, startDate, endDate, rawInventory, rawMovements, skusMap, familiesMap, branchesMap]);
+  }, [loading, selectedReportId, selectedBranchId, startDate, endDate, rawInventory, rawMovements, skusMap, familiesMap, branchesMap, skus]);
 
   // Dynamic filter by text query inside computed selection
   const filteredPreviewData = React.useMemo(() => {
@@ -597,6 +706,13 @@ export default function Reports() {
           series2Map.set(row.manufacturer, (series2Map.get(row.manufacturer) || 0) + (row.total_valuation || 0));
         });
         break;
+
+      case 'replenishment':
+        filteredPreviewData.forEach(row => {
+          series1Map.set(row.branch_name, (series1Map.get(row.branch_name) || 0) + (row.deficit || 0));
+          series2Map.set(row.manufacturer, (series2Map.get(row.manufacturer) || 0) + (row.deficit || 0));
+        });
+        break;
     }
 
     const series1 = Array.from(series1Map.entries()).map(([name, value]) => ({ name, value }));
@@ -689,6 +805,22 @@ export default function Reports() {
         'Valor Total do Estoque': formatCurrency(r.total_valuation),
         'Última Atualização': r.formatted_date
       }));
+    } else if (selectedReportId === 'replenishment') {
+      rows = filteredPreviewData.map(r => ({
+        'Filial Solicitante': r.branch_name,
+        'SKU': r.sku_code,
+        'Fabricante': r.manufacturer,
+        'Linha': r.line,
+        'Esférico (SPH)': formatRefraction(r.spherical),
+        'Cilíndrico (CYL)': formatCylinder(r.cylindrical),
+        'Estoque Atual': r.quantity,
+        'Estoque Mínimo': r.min_stock,
+        'Déficit (Reposição)': r.deficit,
+        'Sugestão de Ressuprimento': r.best_recommendation,
+        'Doadores Disponíveis (Estoque | Excedente)': r.donors?.length > 0
+          ? r.donors.map((d: any) => `${d.branch_name} (Estoque: ${d.quantity}, Excedente: ${d.surplus})`).join(' | ')
+          : 'Nenhum'
+      }));
     }
 
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -772,6 +904,22 @@ export default function Reports() {
         'Custo_Unitario': formatCurrency(r.unit_cost),
         'Valor_Total_Estoque': formatCurrency(r.total_valuation),
         'Ultima_Atualizacao': r.formatted_date
+      }));
+    } else if (selectedReportId === 'replenishment') {
+      rows = filteredPreviewData.map(r => ({
+        'Filial_Solicitante': r.branch_name,
+        'SKU': r.sku_code,
+        'Fabricante': r.manufacturer,
+        'Linha': r.line,
+        'Esferico': formatRefraction(r.spherical),
+        'Cilindrico': formatCylinder(r.cylindrical),
+        'Estoque_Atual': r.quantity,
+        'Estoque_Minimo': r.min_stock,
+        'Deficit': r.deficit,
+        'Sugestao_Ressuprimento': r.best_recommendation,
+        'Doadores_Em_Rede': r.donors?.length > 0
+          ? r.donors.map((d: any) => `${d.branch_name}(Estoque:${d.quantity})`).join('|')
+          : 'Nenhum'
       }));
     }
 
@@ -912,6 +1060,20 @@ export default function Reports() {
         String(r.quantity),
         formatCurrency(r.unit_cost),
         formatCurrency(r.total_valuation)
+      ]);
+    } else if (selectedReportId === 'replenishment') {
+      head = [['Filial Recetora', 'SKU', 'Fabricante', 'Linha', 'Esf', 'Cil', 'Estoque', 'Mín', 'Déficit', 'Sugestão de Ressuprimento']];
+      body = filteredPreviewData.map(r => [
+        r.branch_name,
+        r.sku_code,
+        r.manufacturer,
+        r.line,
+        formatRefraction(r.spherical),
+        formatCylinder(r.cylindrical),
+        String(r.quantity),
+        String(r.min_stock),
+        String(r.deficit),
+        r.best_recommendation
       ]);
     }
 
@@ -1396,6 +1558,18 @@ export default function Reports() {
                           <th className="py-3 px-4 text-right">Última Atualização</th>
                         </>
                       )}
+                      {selectedReportId === 'replenishment' && (
+                        <>
+                          <th className="py-3 px-4">Filial Recetora</th>
+                          <th className="py-3 px-4">SKU</th>
+                          <th className="py-3 px-4">Fabricante</th>
+                          <th className="py-3 px-4 text-center">Esf / Cil</th>
+                          <th className="py-3 px-4 text-center">Físico / Mín</th>
+                          <th className="py-3 px-4 text-center text-rose-600 font-bold">Déficit</th>
+                          <th className="py-3 px-4 text-left">Sugestão de Ressuprimento Cruzado</th>
+                          <th className="py-3 px-4 text-right">Outros Doadores em Potencial</th>
+                        </>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs text-slate-600 font-medium">
@@ -1526,6 +1700,68 @@ export default function Reports() {
                             <td className="py-3 px-4 text-right text-slate-500 font-mono font-bold">{formatCurrency(row.unit_cost)}</td>
                             <td className="py-3 px-4 text-right text-brand-teal font-mono font-black">{formatCurrency(row.total_valuation)}</td>
                             <td className="py-3 px-4 text-right text-slate-400 text-[11px]">{row.formatted_date}</td>
+                          </>
+                        )}
+
+                        {selectedReportId === 'replenishment' && (
+                          <>
+                            <td className="py-3 px-4 font-bold text-slate-800">{row.branch_name}</td>
+                            <td className="py-3 px-4">
+                              <span className="font-mono bg-amber-50 text-[10px] text-amber-700 rounded px-1.5 py-0.5 border border-amber-200 font-extrabold">
+                                {row.sku_code}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex flex-col">
+                                <span className="font-extrabold text-slate-800 text-xs">{row.manufacturer}</span>
+                                <span className="text-[10px] text-slate-400 font-medium">{row.line}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-center font-mono font-bold">
+                              {formatRefraction(row.spherical)} / {formatCylinder(row.cylindrical)}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className="text-slate-600 bg-slate-100 rounded px-1.5 py-0.5 border border-slate-200">
+                                {row.quantity} / {row.min_stock}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className="text-rose-700 font-black bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full inline-block animate-pulse">
+                                -{row.deficit}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-left">
+                              <span className={cn(
+                                "inline-block text-[11px] font-bold px-2 py-1 rounded border",
+                                row.donors?.length > 0
+                                  ? "bg-teal-50 text-teal-800 border-teal-200"
+                                  : "bg-rose-50/55 text-rose-700 border-rose-100"
+                              )}>
+                                🔄 {row.best_recommendation}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex flex-wrap gap-1 justify-end max-w-xs ml-auto">
+                                {row.donors && row.donors.length > 0 ? (
+                                  row.donors.map((d: any) => (
+                                    <span 
+                                      key={d.branch_id} 
+                                      className={cn(
+                                        "inline-flex items-center text-[10px] px-1.5 py-0.5 rounded border leading-tight",
+                                        d.is_surplus_donor 
+                                          ? "bg-teal-50 text-teal-800 border-teal-200 font-extrabold" 
+                                          : "bg-slate-50 text-slate-400 border-slate-200 font-medium"
+                                      )}
+                                      title={`Quantidade: ${d.quantity} | Mínimo: ${d.min_stock} | Excedente: ${d.surplus}`}
+                                    >
+                                      {d.branch_name}: <b className="ml-1 text-[11px]">{d.quantity}</b>
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-slate-300 italic text-[11px]">Nenhum doador na rede</span>
+                                )}
+                              </div>
+                            </td>
                           </>
                         )}
                       </tr>
