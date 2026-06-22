@@ -420,6 +420,14 @@ export default function Inventory() {
   const [newEsf, setNewEsf] = useState('');
   const [newCil, setNewCil] = useState('');
 
+  // Transfer state
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferFromBranchId, setTransferFromBranchId] = useState('');
+  const [transferToBranchId, setTransferToBranchId] = useState('');
+  const [transferSkuId, setTransferSkuId] = useState('');
+  const [transferQty, setTransferQty] = useState('1');
+  const [transferReason, setTransferReason] = useState('');
+
   useEffect(() => {
     if (showModal && selectedItem) {
       const bId = selectedItem.branch_id === 'global' ? '' : selectedItem.branch_id;
@@ -615,6 +623,141 @@ export default function Inventory() {
     } catch (err: any) {
       console.error(err);
       alert(err.message || 'Erro ao processar estoque.');
+    } finally {
+      setMovementLoading(false);
+    }
+  };
+
+  const handleTransferSubmit = async () => {
+    if (!transferFromBranchId || !transferToBranchId) {
+      alert("Por favor, selecione as filiais de origem e destino.");
+      return;
+    }
+    if (transferFromBranchId === transferToBranchId) {
+      alert("A filial de origem e de destino devem ser diferentes.");
+      return;
+    }
+    if (!transferSkuId) {
+      alert("Por favor, selecione a lente (SKU) para transferir.");
+      return;
+    }
+    const qtyVal = parseInt(String(transferQty).trim(), 10);
+    if (isNaN(qtyVal) || qtyVal <= 0) {
+      alert("Insira uma quantidade inteira positiva válida maior que zero.");
+      return;
+    }
+
+    const fromBranch = branches.find(b => b.id === transferFromBranchId);
+    const toBranch = branches.find(b => b.id === transferToBranchId);
+
+    if (!fromBranch || fromBranch.status !== 'active' || fromBranch.id === 'outra' || fromBranch.id === 'outras' || fromBranch.code === 'outra' ||
+        !toBranch || toBranch.status !== 'active' || toBranch.id === 'outra' || toBranch.id === 'outras' || toBranch.code === 'outra') {
+      alert("Operação permitida apenas entre filiais cadastradas e ativas.");
+      return;
+    }
+
+    setMovementLoading(true);
+    try {
+      await runTransaction(db, async (transaction) => {
+        const fromInvId = `${transferFromBranchId}_${transferSkuId}`;
+        const toInvId = `${transferToBranchId}_${transferSkuId}`;
+        
+        const fromInvRef = doc(db, 'inventory', fromInvId);
+        const toInvRef = doc(db, 'inventory', toInvId);
+        
+        const fromSnap = await transaction.get(fromInvRef);
+        const toSnap = await transaction.get(toInvRef);
+
+        let currentFromQty = 0;
+        if (fromSnap.exists()) {
+          const rawQty = fromSnap.data().quantity;
+          currentFromQty = typeof rawQty === 'number' ? rawQty : (parseInt(String(rawQty || 0), 10) || 0);
+          if (isNaN(currentFromQty) || currentFromQty < 0) {
+            currentFromQty = 0;
+          }
+        }
+
+        if (currentFromQty < qtyVal) {
+          throw new Error(`Estoque insuficiente na filial de origem (${currentFromQty} disponível).`);
+        }
+
+        let currentToQty = 0;
+        if (toSnap.exists()) {
+          const rawQty = toSnap.data().quantity;
+          currentToQty = typeof rawQty === 'number' ? rawQty : (parseInt(String(rawQty || 0), 10) || 0);
+          if (isNaN(currentToQty) || currentToQty < 0) {
+            currentToQty = 0;
+          }
+        }
+
+        // Subtract from Origin
+        transaction.update(fromInvRef, {
+          quantity: currentFromQty - qtyVal,
+          updated_at: serverTimestamp()
+        });
+
+        // Add to Destination
+        transaction.set(toInvRef, {
+          branch_id: transferToBranchId,
+          sku_id: transferSkuId,
+          quantity: currentToQty + qtyVal,
+          updated_at: serverTimestamp()
+        }, { merge: true });
+
+        // Register transfer_out movement for origin branch
+        const movOutRef = doc(collection(db, 'movements'));
+        transaction.set(movOutRef, {
+          branch_id: transferFromBranchId,
+          sku_id: transferSkuId,
+          type: 'transfer_out',
+          quantity: qtyVal,
+          reason: `Transferência para ${toBranch?.name || transferToBranchId} (${transferReason || 'Sem observações'})`,
+          user_id: auth.currentUser?.uid,
+          created_at: serverTimestamp()
+        });
+
+        // Register transfer_in movement for destination branch
+        const movInRef = doc(collection(db, 'movements'));
+        transaction.set(movInRef, {
+          branch_id: transferToBranchId,
+          sku_id: transferSkuId,
+          type: 'transfer_in',
+          quantity: qtyVal,
+          reason: `Recebido de ${fromBranch?.name || transferFromBranchId} (${transferReason || 'Sem observações'})`,
+          user_id: auth.currentUser?.uid,
+          created_at: serverTimestamp()
+        });
+
+        // Register completed transfer log in transfers collection
+        const transferRef = doc(collection(db, 'transfers'));
+        transaction.set(transferRef, {
+          from_branch_id: transferFromBranchId,
+          to_branch_id: transferToBranchId,
+          sku_id: transferSkuId,
+          quantity: qtyVal,
+          reason: transferReason || 'Transferência direta pelo Estoque Geral',
+          user_id: auth.currentUser?.uid,
+          status: 'completed',
+          approved_by: auth.currentUser?.uid,
+          created_at: serverTimestamp(),
+          updated_at: serverTimestamp()
+        });
+      });
+
+      alert("Transferência realizada com sucesso!");
+      setShowTransferModal(false);
+      // Reset state
+      setTransferFromBranchId('');
+      setTransferToBranchId('');
+      setTransferSkuId('');
+      setTransferQty('1');
+      setTransferReason('');
+      clearCache('lensSkus');
+      fetchAllSkus(true);
+      fetchData(true);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Erro ao processar transferência.');
     } finally {
       setMovementLoading(false);
     }
@@ -1109,7 +1252,18 @@ export default function Inventory() {
             >
               <MinusCircle size={18} className="mr-2" /> Baixa de Estoque
             </button>
-            <button className="flex items-center px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition-colors cursor-pointer">
+            <button 
+              onClick={() => {
+                fetchAllSkus(true);
+                setTransferFromBranchId(selectedBranch || profile?.branch_id || '');
+                setTransferToBranchId('');
+                setTransferSkuId('');
+                setTransferQty('1');
+                setTransferReason('');
+                setShowTransferModal(true);
+              }}
+              className="flex items-center px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition-colors cursor-pointer"
+            >
               <ArrowRightLeft size={18} className="mr-2" /> Transferência
             </button>
           </div>
@@ -1440,7 +1594,19 @@ export default function Inventory() {
                           </button>
                           {isAdmin && (
                             <>
-                              <button className="p-2 text-slate-400 hover:text-amber-600 transition-colors rounded-lg bg-slate-100 hover:bg-amber-50" title="Transferir">
+                              <button 
+                                onClick={() => {
+                                  fetchAllSkus(true);
+                                  setTransferFromBranchId(item.branch_id);
+                                  setTransferToBranchId('');
+                                  setTransferSkuId(item.sku_id);
+                                  setTransferQty('1');
+                                  setTransferReason('');
+                                  setShowTransferModal(true);
+                                }}
+                                className="p-2 text-slate-400 hover:text-amber-600 transition-colors rounded-lg bg-slate-100 hover:bg-amber-50" 
+                                title="Transferir"
+                              >
                                 <ArrowRightLeft size={16} />
                               </button>
                               <button className="p-2 text-slate-400 hover:text-slate-600 transition-colors rounded-lg bg-slate-100">
@@ -1951,6 +2117,160 @@ export default function Inventory() {
                   } disabled:opacity-50`}
                 >
                   {movementLoading ? 'Processando...' : 'Confirmar'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Transfer Modal */}
+      <AnimatePresence>
+        {showTransferModal && (
+          <motion.div 
+            key="transfer-modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm shadow-xl"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center space-x-2.5">
+                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                    <ArrowRightLeft size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-800">Transferir Lentes</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Movimente de forma integrada e segura entre filiais.</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowTransferModal(false)} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 cursor-pointer">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Source Branch selector */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Filial de Origem</label>
+                  <select 
+                    value={transferFromBranchId}
+                    onChange={(e) => {
+                      setTransferFromBranchId(e.target.value);
+                      if (e.target.value === transferToBranchId) {
+                        setTransferToBranchId('');
+                      }
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal transition-all text-sm font-semibold cursor-pointer"
+                  >
+                    <option value="">Selecione a Filial de Origem</option>
+                    {branches.filter(b => b.status === 'active' && b.id !== 'outra' && b.id !== 'outras' && b.code !== 'outra').map(b => (
+                      <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Destination Branch selector */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Filial de Destino</label>
+                  <select 
+                    value={transferToBranchId}
+                    onChange={(e) => setTransferToBranchId(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal transition-all text-sm font-semibold cursor-pointer"
+                  >
+                    <option value="">Selecione a Filial de Destino</option>
+                    {branches
+                      .filter(b => b.status === 'active' && b.id !== 'outra' && b.id !== 'outras' && b.code !== 'outra' && b.id !== transferFromBranchId)
+                      .map(b => (
+                        <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+                      ))
+                    }
+                  </select>
+                </div>
+
+                {/* Sku selector */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Lente (SKU)</label>
+                  <select 
+                    value={transferSkuId}
+                    onChange={(e) => setTransferSkuId(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal transition-all text-sm font-semibold cursor-pointer"
+                  >
+                    <option value="">Selecione a Lente (SKU)</option>
+                    {allSkus.map(s => {
+                      const family = families.find(f => f.id === s.family_id);
+                      return (
+                        <option key={s.id} value={s.id}>
+                          {s.sku_code} {family ? `(${family.manufacturer} ${family.line})` : ''} - ESF: {s.spherical >= 0 ? '+' : ''}{s.spherical?.toFixed(2)} / CIL: {s.cylindrical?.toFixed(2)}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {/* Quantity */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Quantidade a Transferir</label>
+                  <input 
+                    type="number"
+                    value={transferQty}
+                    onChange={(e) => setTransferQty(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-brand-teal"
+                    min="1"
+                  />
+                </div>
+
+                {/* Reason */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Observações / Motivo (Opcional)</label>
+                  <textarea 
+                    value={transferReason}
+                    onChange={(e) => setTransferReason(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal text-sm font-medium h-20 resize-none mb-2"
+                    placeholder="Ex: OS Urgente, Reposicionar estoque, Ruptura na filial..."
+                  />
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    <span className="text-[10px] font-bold text-slate-400 self-center uppercase tracking-widest mr-1">Sugestões:</span>
+                    {["Remanejamento Preventivo", "Pedido Urgente (Lab)", "Solicitação de OS de Cliente", "Empréstimo Temporário"].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setTransferReason(m)}
+                        className={cn(
+                          "px-2.5 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer",
+                          transferReason === m 
+                            ? "bg-brand-teal text-white border-brand-teal" 
+                            : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600"
+                        )}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8 flex space-x-3">
+                <button 
+                  type="button"
+                  onClick={() => setShowTransferModal(false)}
+                  className="flex-1 px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="button"
+                  onClick={handleTransferSubmit}
+                  disabled={movementLoading}
+                  className="flex-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-indigo-900/10 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {movementLoading ? 'Processando...' : 'Efetuar Transferência'}
                 </button>
               </div>
             </motion.div>
