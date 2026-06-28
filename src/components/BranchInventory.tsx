@@ -22,7 +22,7 @@ import {
 import { db, getCachedBranches, getCachedFamilies, getCachedSkus } from '@/src/lib/firebase';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { Branch, LensFamily, LensSku } from '@/src/types';
-import { cn, formatRefraction, formatCylinder, generateSkuCode } from '@/src/lib/utils';
+import { cn, formatRefraction, formatCylinder, generateSkuCode, formatCurrency } from '@/src/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -581,6 +581,35 @@ export default function BranchInventory() {
   const totalStockSum = filteredSkusList.reduce((sum, item) => sum + item.totalQty, 0);
   const activeSkusCount = filteredSkusList.filter(item => item.totalQty > 0).length;
 
+  const totalStockValue = React.useMemo(() => {
+    return filteredSkusList.reduce((sum, item) => {
+      const cost = item.family?.cost_price || 0;
+      return sum + (item.totalQty * cost);
+    }, 0);
+  }, [filteredSkusList]);
+
+  // Group by family of lenses: family_id -> { family: LensFamily, totalQty: number, totalValue: number }
+  const stockByFamilyList = React.useMemo(() => {
+    const groups: Record<string, { family: LensFamily; totalQty: number; totalValue: number }> = {};
+    
+    filteredSkusList.forEach(item => {
+      if (item.totalQty > 0 && item.family) {
+        const f = item.family;
+        if (!groups[f.id]) {
+          groups[f.id] = {
+            family: f,
+            totalQty: 0,
+            totalValue: 0
+          };
+        }
+        groups[f.id].totalQty += item.totalQty;
+        groups[f.id].totalValue += item.totalQty * (f.cost_price || 0);
+      }
+    });
+
+    return Object.values(groups).sort((a, b) => b.totalValue - a.totalValue);
+  }, [filteredSkusList]);
+
   // Render a minimal screen with only search and overall stock sum for non-admins (vendedores / consultores / visitantes)
   if (!isAdmin) {
     // Spherical scale (+6.00 to -6.00)
@@ -875,7 +904,7 @@ export default function BranchInventory() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4">
           <div className="p-3 bg-teal-50 text-brand-teal rounded-2xl">
             <Layers size={24} />
@@ -883,6 +912,16 @@ export default function BranchInventory() {
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Estoque Consolidado</p>
             <h3 className="text-2xl font-black text-slate-800 mt-1">{loading ? '...' : totalStockSum} un.</h3>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4">
+          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+            <span className="text-xl font-bold font-mono">R$</span>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Valor do Estoque</p>
+            <h3 className="text-2xl font-black text-slate-800 mt-1">{loading ? '...' : formatCurrency(totalStockValue)}</h3>
           </div>
         </div>
 
@@ -906,6 +945,46 @@ export default function BranchInventory() {
           </div>
         </div>
       </div>
+
+      {/* Detalhamento por Família de Lentes */}
+      {!loading && stockByFamilyList.length > 0 && (
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Layers size={16} className="text-indigo-600" />
+              Estoque Geral e Valor por Família de Lentes
+            </h3>
+            <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-2.5 py-1 rounded-lg uppercase tracking-wider">
+              Ordenado por Maior Valor
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {stockByFamilyList.map(({ family, totalQty, totalValue }) => (
+              <div key={family.id} className="p-4 bg-slate-50/50 rounded-2xl border border-slate-150/50 flex justify-between items-center hover:bg-slate-50 transition-colors">
+                <div>
+                  <h4 className="font-extrabold text-slate-800 text-sm">
+                    {family.manufacturer} - {family.line}
+                  </h4>
+                  <p className="text-[11px] text-slate-450 mt-1 font-semibold">
+                    {family.treatment || 'Sem tratamento'}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-0.5 font-medium">
+                    Custo Unitário: {formatCurrency(family.cost_price || 0)}
+                  </p>
+                </div>
+                <div className="text-right whitespace-nowrap pl-2">
+                  <span className="text-xs font-extrabold text-slate-500 block">
+                    {totalQty} un.
+                  </span>
+                  <span className="text-sm font-black text-indigo-600 block mt-0.5 font-mono">
+                    {formatCurrency(totalValue)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Master Filter Card */}
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
