@@ -51,6 +51,7 @@ export default function Dashboard() {
   const [configSaving, setConfigSaving] = useState(false);
   const [attentionAlerts, setAttentionAlerts] = useState<any[]>([]);
   const [alertTab, setAlertTab] = useState<'critical' | 'attention'>('critical');
+  const [familyChartMode, setFamilyChartMode] = useState<'qty' | 'value'>('qty');
   
   const isAdmin = profile?.role === 'admin';
   const COLORS = ['#0F766E', '#164E63', '#10B981', '#3B82F6', '#F59E0B', '#EF4444'];
@@ -117,7 +118,7 @@ export default function Dashboard() {
       let criticalCount = 0;
       const branchTotals: Record<string, number> = {};
       const materialTotals: Record<string, number> = {};
-      const familyTotals: Record<string, number> = {};
+      const familyTotals: Record<string, { qty: number; value: number }> = {};
       const alerts: any[] = [];
       const attentionList: any[] = [];
 
@@ -164,7 +165,11 @@ export default function Dashboard() {
 
           // Family Distribution
           const familyName = `${family.manufacturer} ${family.line}`;
-          familyTotals[familyName] = (familyTotals[familyName] || 0) + item.quantity;
+          if (!familyTotals[familyName]) {
+            familyTotals[familyName] = { qty: 0, value: 0 };
+          }
+          familyTotals[familyName].qty += item.quantity;
+          familyTotals[familyName].value += item.quantity * (family.cost_price || 0);
         }
       });
 
@@ -172,7 +177,7 @@ export default function Dashboard() {
       const formattedBranchData = Object.entries(branchTotals).map(([name, stock]) => ({ name, stock }));
       const formattedMaterialData = Object.entries(materialTotals).map(([name, value]) => ({ name, value }));
       const formattedFamilyData = Object.entries(familyTotals)
-        .map(([name, value]) => ({ name, value }))
+        .map(([name, data]) => ({ name, value: data.qty, totalValue: data.value }))
         .sort((a, b) => b.value - a.value);
 
       setStats({
@@ -403,9 +408,37 @@ export default function Dashboard() {
 
       {/* Families Distribution Chart */}
       <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
-        <div className="mb-6">
-          <h3 className="text-lg font-bold text-slate-800">Distribuição de Estoque por Família</h3>
-          <p className="text-xs text-slate-400 mt-1">Quantidade de lentes físicas em estoque agregadas por fabricante e linha de produto.</p>
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-bold text-slate-800">Distribuição de Estoque por Família</h3>
+            <p className="text-xs text-slate-400 mt-1">
+              {familyChartMode === 'qty' 
+                ? "Quantidade de lentes físicas em estoque agregadas por fabricante e linha de produto." 
+                : "Valor financeiro total do estoque de lentes agregadas por fabricante e linha de produto."}
+            </p>
+          </div>
+          {isAdmin && (
+            <div className="flex bg-slate-100 p-1 rounded-xl self-start sm:self-center">
+              <button
+                onClick={() => setFamilyChartMode('qty')}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer",
+                  familyChartMode === 'qty' ? "bg-white text-teal-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                )}
+              >
+                Quantidade
+              </button>
+              <button
+                onClick={() => setFamilyChartMode('value')}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer",
+                  familyChartMode === 'value' ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                )}
+              >
+                Valor (R$)
+              </button>
+            </div>
+          )}
         </div>
         <div key="family_chart_container" className="h-[350px] w-full">
           {familyStockData.length === 0 ? (
@@ -429,13 +462,34 @@ export default function Dashboard() {
                   axisLine={false} 
                   tickLine={false} 
                   tick={{ fill: '#94a3b8', fontSize: 11 }} 
+                  tickFormatter={(val) => familyChartMode === 'value' ? `R$ ${val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}` : val}
                 />
                 <Tooltip 
                   isAnimationActive={false}
                   cursor={{ fill: '#f8fafc' }}
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '11px', fontWeight: 'bold' }}
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-xl text-xs font-semibold">
+                          <p className="text-slate-800 font-bold mb-1.5">{data.name}</p>
+                          <div className="space-y-1">
+                            <p className="text-slate-500">
+                              Quantidade: <span className="font-extrabold text-slate-700">{data.value} un</span>
+                            </p>
+                            {isAdmin && (
+                              <p className="text-indigo-600">
+                                Valor Total: <span className="font-black font-mono">{formatCurrency(data.totalValue)}</span>
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
                 />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={24} isAnimationActive={false}>
+                <Bar dataKey={familyChartMode === 'qty' ? 'value' : 'totalValue'} radius={[6, 6, 0, 0]} barSize={24} isAnimationActive={false}>
                   {familyStockData.map((entry, index) => {
                     const familyCOLORS = ['#0d9488', '#0f766e', '#0891b2', '#2563eb', '#4f46e5', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
                     return <Cell key={`cell-${index}`} fill={familyCOLORS[index % familyCOLORS.length]} />;
@@ -446,6 +500,48 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Families stock value and quantity detailed breakdown table/list */}
+      {!loading && familyStockData.length > 0 && (
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-50 pb-2">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Package size={16} className="text-teal-600" />
+              Consolidação de Estoque por Família de Lentes
+            </h3>
+            <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-2.5 py-1 rounded-lg uppercase tracking-wider">
+              Quantidades e Valores
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {familyStockData.map((item, idx) => (
+              <div key={idx} className="p-4 bg-slate-50/50 hover:bg-slate-50 rounded-xl border border-slate-100 flex flex-col justify-between transition-all">
+                <div>
+                  <h4 className="font-extrabold text-slate-800 text-xs">
+                    {item.name}
+                  </h4>
+                  <div className="flex justify-between items-end mt-3">
+                    <div>
+                      <span className="text-[9px] text-slate-400 block font-bold uppercase tracking-wider">Quantidade</span>
+                      <span className="text-xs font-black text-slate-700">
+                        {item.value} <span className="text-[10px] font-normal text-slate-400">un</span>
+                      </span>
+                    </div>
+                    {isAdmin && (
+                      <div className="text-right">
+                        <span className="text-[9px] text-slate-400 block font-bold uppercase tracking-wider">Valor do Estoque</span>
+                        <span className="text-xs font-black text-indigo-600 font-mono">
+                          {formatCurrency(item.totalValue)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Recent Movements */}
