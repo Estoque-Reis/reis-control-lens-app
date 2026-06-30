@@ -1034,9 +1034,13 @@ export default function Reports() {
     link.setAttribute("href", url);
     link.setAttribute("download", `${getExportFilename()}.csv`);
     link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (typeof document !== 'undefined' && document.body) {
+      document.body.appendChild(link);
+      link.click();
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
+    }
   };
 
   // EXPORT 3: PREMIUM A4 PDF
