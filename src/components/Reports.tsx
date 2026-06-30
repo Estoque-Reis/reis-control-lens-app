@@ -126,6 +126,7 @@ export default function Reports() {
   // Filtering criteria
   const [selectedReportId, setSelectedReportId] = useState<ReportType>('inventory_current');
   const [selectedBranchId, setSelectedBranchId] = useState<string>('all');
+  const [selectedFamilyId, setSelectedFamilyId] = useState<string>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -266,6 +267,8 @@ export default function Reports() {
           const branch = branchesMap.get(item.branch_id);
           if (!sku || !branch) continue;
 
+          if (selectedFamilyId !== 'all' && sku.family_id !== selectedFamilyId) continue;
+
           const family = familiesMap.get(sku.family_id);
           const updateDate = parseFirestoreDate(item.updated_at);
 
@@ -297,6 +300,10 @@ export default function Reports() {
         for (const item of rawInventory) {
           // If filtering by branch, only include that branch's contribution
           if (selectedBranchId !== 'all' && item.branch_id !== selectedBranchId) continue;
+
+          const sku = skusMap.get(item.sku_id);
+          if (!sku) continue;
+          if (selectedFamilyId !== 'all' && sku.family_id !== selectedFamilyId) continue;
 
           const updateDate = parseFirestoreDate(item.updated_at);
           if (!isDateInRange(updateDate, startDate, endDate)) continue;
@@ -359,6 +366,8 @@ export default function Reports() {
           const branch = branchesMap.get(item.branch_id);
           if (!sku || !branch) continue;
 
+          if (selectedFamilyId !== 'all' && sku.family_id !== selectedFamilyId) continue;
+
           const family = familiesMap.get(sku.family_id);
           const minStock = family?.min_stock_per_sku || 0;
 
@@ -402,6 +411,8 @@ export default function Reports() {
 
         for (const branch of activeBranches) {
           for (const sku of skus) {
+            if (selectedFamilyId !== 'all' && sku.family_id !== selectedFamilyId) continue;
+
             const item = invMap.get(`${branch.id}_${sku.id}`);
             const qty = item ? item.quantity : 0;
 
@@ -441,6 +452,8 @@ export default function Reports() {
           const branch = branchesMap.get(movement.branch_id);
           if (!sku || !branch) continue;
 
+          if (selectedFamilyId !== 'all' && sku.family_id !== selectedFamilyId) continue;
+
           const family = familiesMap.get(sku.family_id);
 
           result.push({
@@ -473,6 +486,8 @@ export default function Reports() {
           const sku = skusMap.get(item.sku_id);
           const branch = branchesMap.get(item.branch_id);
           if (!sku || !branch) continue;
+
+          if (selectedFamilyId !== 'all' && sku.family_id !== selectedFamilyId) continue;
 
           const family = familiesMap.get(sku.family_id);
           const updateDate = parseFirestoreDate(item.updated_at);
@@ -521,6 +536,8 @@ export default function Reports() {
         // For each active branch, analyze each SKU to check if replenishment is needed
         for (const branch of activeBranches) {
           for (const sku of skus) {
+            if (selectedFamilyId !== 'all' && sku.family_id !== selectedFamilyId) continue;
+
             const currentQty = invMap.get(`${branch.id}_${sku.id}`) || 0;
             const family = familiesMap.get(sku.family_id);
             const minStock = family?.min_stock_per_sku || 0;
@@ -605,7 +622,7 @@ export default function Reports() {
       default:
         return [];
     }
-  }, [loading, selectedReportId, selectedBranchId, startDate, endDate, rawInventory, rawMovements, skusMap, familiesMap, branchesMap, skus]);
+  }, [loading, selectedReportId, selectedBranchId, selectedFamilyId, startDate, endDate, rawInventory, rawMovements, skusMap, familiesMap, branchesMap, skus]);
 
   // Dynamic filter by text query inside computed selection
   const filteredPreviewData = React.useMemo(() => {
@@ -623,6 +640,79 @@ export default function Reports() {
       );
     });
   }, [computedDataAll, searchQuery]);
+
+  // Compute replenishment grouped by family for high level insights
+  const replenishmentByFamily = React.useMemo(() => {
+    if (selectedReportId !== 'replenishment' || loading) return [];
+
+    // Map current inventory for rapid lookup of [branchId_skuId] -> quantity
+    const invMap = new Map<string, number>();
+    for (const item of rawInventory) {
+      invMap.set(`${item.branch_id}_${item.sku_id}`, item.quantity || 0);
+    }
+
+    const activeBranches = selectedBranchId === 'all' 
+      ? branches 
+      : branches.filter(b => b.id === selectedBranchId);
+
+    const groups: Record<string, {
+      familyId: string;
+      manufacturer: string;
+      line: string;
+      treatment: string;
+      defectItemsCount: number;
+      totalDeficitQty: number;
+      itemsWithDonors: number;
+      itemsWithoutDonors: number;
+    }> = {};
+
+    // For each active branch, analyze each SKU to check if replenishment is needed
+    for (const branch of activeBranches) {
+      for (const sku of skus) {
+        const currentQty = invMap.get(`${branch.id}_${sku.id}`) || 0;
+        const family = familiesMap.get(sku.family_id);
+        const minStock = family?.min_stock_per_sku || 0;
+
+        if (currentQty < minStock) {
+          const deficit = minStock - currentQty;
+          
+          // Find if there are potential donors
+          let donorsCount = 0;
+          for (const otherBranch of branches) {
+            if (otherBranch.id === branch.id) continue;
+            const otherQty = invMap.get(`${otherBranch.id}_${sku.id}`) || 0;
+            if (otherQty > 0) {
+              donorsCount++;
+            }
+          }
+
+          const fId = sku.family_id;
+          if (!groups[fId]) {
+            groups[fId] = {
+              familyId: fId,
+              manufacturer: family?.manufacturer || 'N/A',
+              line: family?.line || 'N/A',
+              treatment: family?.treatment || 'Sem tratamento',
+              defectItemsCount: 0,
+              totalDeficitQty: 0,
+              itemsWithDonors: 0,
+              itemsWithoutDonors: 0
+            };
+          }
+
+          groups[fId].defectItemsCount += 1;
+          groups[fId].totalDeficitQty += deficit;
+          if (donorsCount > 0) {
+            groups[fId].itemsWithDonors += 1;
+          } else {
+            groups[fId].itemsWithoutDonors += 1;
+          }
+        }
+      }
+    }
+
+    return Object.values(groups).sort((a, b) => b.totalDeficitQty - a.totalDeficitQty);
+  }, [loading, selectedReportId, selectedBranchId, rawInventory, branches, skus, familiesMap]);
 
   // Compute stats based on the ACTIVE dataset (after text query)
   const stats = React.useMemo(() => {
@@ -1141,7 +1231,10 @@ export default function Reports() {
       ) : (
         <>
           {/* Universal Filters Controller Card */}
-          <div className="bg-white rounded-3xl p-6 shadow-xs border border-slate-100 grid grid-cols-1 md:grid-cols-4 gap-5">
+          <div className={cn(
+            "bg-white rounded-3xl p-6 shadow-xs border border-slate-100 grid grid-cols-1 gap-5",
+            selectedReportId === 'replenishment' ? "md:grid-cols-5" : "md:grid-cols-4"
+          )}>
             <div>
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                 <Building2 size={13} className="text-slate-400" />
@@ -1158,6 +1251,27 @@ export default function Reports() {
                 ))}
               </select>
             </div>
+
+            {selectedReportId === 'replenishment' && (
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                  <Layers2 size={13} className="text-slate-400" />
+                  Família de Lentes
+                </label>
+                <select
+                  value={selectedFamilyId}
+                  onChange={(e) => setSelectedFamilyId(e.target.value)}
+                  className="w-full bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-xl px-3 py-2.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal text-xs font-bold transition-all cursor-pointer"
+                >
+                  <option value="all">📦 Todas as Famílias (Sem Filtro)</option>
+                  {families.map(f => (
+                    <option key={f.id} value={f.id}>
+                      {f.manufacturer} - {f.line} ({f.treatment || 'Sem tratamento'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
@@ -1476,6 +1590,102 @@ export default function Reports() {
               </div>
               <div className="border-b border-slate-100 pb-2" />
             </div>
+
+            {/* Family Replenishment Overview Cards */}
+            {selectedReportId === 'replenishment' && replenishmentByFamily.length > 0 && (
+              <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                      <Layers size={14} className="text-teal-600" />
+                      Ressuprimento Cruzado Detalhado por Família
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Resumo consolidado de necessidades por família de lentes. Clique em um card para isolar ou limpar filtros abaixo.
+                    </p>
+                  </div>
+                  {selectedFamilyId !== 'all' && (
+                    <button
+                      onClick={() => setSelectedFamilyId('all')}
+                      className="inline-flex items-center space-x-1 px-2.5 py-1 bg-white hover:bg-slate-100 text-teal-600 border border-teal-200 hover:border-teal-300 font-bold text-[10px] rounded-lg transition-all cursor-pointer shadow-xs"
+                    >
+                      <span>Mostrar Todas as Famílias</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+                  {replenishmentByFamily.map((group) => {
+                    const isCurrent = selectedFamilyId === group.familyId;
+                    return (
+                      <div
+                        key={`rep_fam_${group.familyId}`}
+                        onClick={() => setSelectedFamilyId(isCurrent ? 'all' : group.familyId)}
+                        className={cn(
+                          "p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between space-y-3 relative overflow-hidden group select-none",
+                          isCurrent
+                            ? "bg-teal-50/60 border-teal-300 shadow-sm ring-1 ring-teal-300"
+                            : "bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-xs hover:bg-slate-50/20"
+                        )}
+                      >
+                        {isCurrent && (
+                          <div className="absolute top-0 right-0 bg-teal-500 text-white text-[8px] font-black tracking-widest px-2 py-0.5 rounded-bl-lg uppercase">
+                            Ativo
+                          </div>
+                        )}
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
+                              {group.manufacturer}
+                            </span>
+                            <span className="text-[9px] bg-slate-100 text-slate-500 font-bold px-1.5 py-0.2 rounded">
+                              {group.treatment}
+                            </span>
+                          </div>
+                          <h4 className="text-xs font-black text-slate-800 tracking-tight leading-snug mt-1 group-hover:text-teal-600 transition-colors">
+                            {group.line}
+                          </h4>
+                        </div>
+
+                        <div className="border-t border-dashed border-slate-100 pt-2.5 flex items-center justify-between">
+                          <div>
+                            <span className="text-[9px] text-slate-400 block font-bold uppercase tracking-wider">Necessidade</span>
+                            <span className={cn(
+                              "text-sm font-extrabold",
+                              isCurrent ? "text-teal-600" : "text-slate-800"
+                            )}>
+                              {group.totalDeficitQty} un
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[9px] text-slate-400 block font-bold uppercase tracking-wider">SKUs afetados</span>
+                            <span className="text-xs font-extrabold text-slate-600">
+                              {group.defectItemsCount} SKUs
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={cn(
+                            "text-[9px] font-bold px-1.5 py-0.5 rounded-md border",
+                            group.itemsWithDonors > 0
+                              ? "bg-emerald-50 border-emerald-100 text-emerald-600"
+                              : "bg-slate-100 border-slate-200 text-slate-400"
+                          )}>
+                            {group.itemsWithDonors} un c/ doador
+                          </span>
+                          {group.itemsWithoutDonors > 0 && (
+                            <span className="text-[9px] bg-amber-50 border border-amber-100 text-amber-600 font-bold px-1.5 py-0.5 rounded-md">
+                              {group.itemsWithoutDonors} un s/ doador
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Preview Data Grid table */}
             <div className="overflow-x-auto rounded-2xl border border-slate-150">
